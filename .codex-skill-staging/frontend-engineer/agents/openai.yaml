@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Engineer"
+  short_description: "Ship polished frontend changes with strong UX discipline."
+  default_prompt: "Use $frontend-engineer to implement or debug frontend work with production-ready quality."

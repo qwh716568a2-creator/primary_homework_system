@@ -1,0 +1,4 @@
+interface:
+  display_name: "Backend Engineer"
+  short_description: "Ship reliable backend changes with strong correctness discipline."
+  default_prompt: "Use $backend-engineer to implement or debug backend work with production-ready quality."

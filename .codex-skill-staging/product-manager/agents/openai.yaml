@@ -1,0 +1,4 @@
+interface:
+  display_name: "Product Manager"
+  short_description: "Turn product ideas into scoped, testable deliverables."
+  default_prompt: "Use $product-manager to turn a feature idea into an MVP-ready product plan."
