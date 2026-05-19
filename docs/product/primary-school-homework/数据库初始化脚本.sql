@@ -1,4 +1,4 @@
-SET NAMES utf8mb4;
+﻿SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 CREATE DATABASE IF NOT EXISTS `primary_homework_system`
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS `organization_class` (
   `grade_id` BIGINT NOT NULL COMMENT '年级ID',
   `class_name` VARCHAR(64) NOT NULL COMMENT '班级名称',
   `class_code` VARCHAR(64) DEFAULT NULL COMMENT '班级编码',
-  `homeroom_teacher_id` BIGINT DEFAULT NULL COMMENT '班主任用户ID',
+  `homeroom_teacher_id` BIGINT DEFAULT NULL COMMENT '班主任账户ID',
   `status` VARCHAR(32) NOT NULL DEFAULT 'enabled' COMMENT '状态',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -47,10 +47,10 @@ CREATE TABLE IF NOT EXISTS `organization_class` (
 
 CREATE TABLE IF NOT EXISTS `user_account` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `login_name` VARCHAR(64) DEFAULT NULL COMMENT '管理员登录名，教师学生家长为空',
+  `login_name` VARCHAR(64) DEFAULT NULL COMMENT '登录名，仅管理员使用',
   `password_hash` VARCHAR(255) NOT NULL COMMENT '密码密文',
-  `user_name` VARCHAR(64) NOT NULL COMMENT '用户名',
-  `role_type` VARCHAR(32) NOT NULL COMMENT '角色类型 teacher student parent admin',
+  `user_name` VARCHAR(64) NOT NULL COMMENT '用户姓名',
+  `role_type` VARCHAR(32) NOT NULL COMMENT '角色类型：teacher student parent admin',
   `school_id` BIGINT DEFAULT NULL COMMENT '所属学校ID',
   `status` VARCHAR(32) NOT NULL DEFAULT 'enabled' COMMENT '状态',
   `last_login_at` DATETIME DEFAULT NULL COMMENT '最后登录时间',
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS `teacher_profile` (
   UNIQUE KEY `uk_teacher_user_id` (`teacher_user_id`),
   UNIQUE KEY `uk_teacher_mobile` (`mobile`),
   UNIQUE KEY `uk_teacher_school_no` (`school_id`, `teacher_no`),
-  KEY `idx_teacher_profile_school` (`school_id`)
+  KEY `idx_user_teacher_school` (`school_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='教师资料表';
 
 CREATE TABLE IF NOT EXISTS `parent_profile` (
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS `parent_profile` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_parent_user_id` (`parent_user_id`),
   UNIQUE KEY `uk_parent_mobile` (`mobile`),
-  KEY `idx_parent_profile_school` (`school_id`)
+  KEY `idx_user_parent_school` (`school_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='家长资料表';
 
 CREATE TABLE IF NOT EXISTS `teacher_class_subject_rel` (
@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS `teacher_class_subject_rel` (
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_teacher_class_subject` (`teacher_id`, `class_id`, `subject_code`),
+  UNIQUE KEY `uk_class_subject` (`class_id`, `subject_code`),
   KEY `idx_teacher_class` (`class_id`, `teacher_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='教师班级学科关系表';
 
@@ -146,9 +147,9 @@ CREATE TABLE IF NOT EXISTS `homework` (
   `deadline_at` DATETIME NOT NULL COMMENT '截止时间',
   `allow_late_submit` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否允许逾期提交',
   `allow_resubmit` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否允许重复提交',
-  `submit_type_mask` VARCHAR(64) NOT NULL COMMENT '提交方式组合 text,image,file',
+  `submit_type_mask` VARCHAR(64) NOT NULL COMMENT '提交方式组合：text,image,file',
   `need_parent_confirm` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否需要家长确认',
-  `status` VARCHAR(32) NOT NULL DEFAULT 'draft' COMMENT '状态 draft published revoked closed',
+  `status` VARCHAR(32) NOT NULL DEFAULT 'draft' COMMENT '状态：draft published revoked closed',
   `published_at` DATETIME DEFAULT NULL COMMENT '发布时间',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -161,7 +162,7 @@ CREATE TABLE IF NOT EXISTS `homework` (
 CREATE TABLE IF NOT EXISTS `homework_attachment` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `homework_id` BIGINT NOT NULL COMMENT '作业ID',
-  `asset_type` VARCHAR(32) NOT NULL COMMENT '文件类型 image file',
+  `asset_type` VARCHAR(32) NOT NULL COMMENT '文件类型：image file',
   `asset_url` VARCHAR(512) NOT NULL COMMENT '文件地址',
   `asset_name` VARCHAR(255) DEFAULT NULL COMMENT '文件名称',
   `asset_size` BIGINT DEFAULT NULL COMMENT '文件大小',
@@ -178,7 +179,7 @@ CREATE TABLE IF NOT EXISTS `homework_class_rel` (
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_homework_class` (`homework_id`, `class_id`),
-  KEY `idx_homework_class_rel_class` (`class_id`)
+  KEY `idx_homework_class_class` (`class_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='作业班级关系表';
 
 CREATE TABLE IF NOT EXISTS `student_homework_task` (
@@ -186,14 +187,14 @@ CREATE TABLE IF NOT EXISTS `student_homework_task` (
   `homework_id` BIGINT NOT NULL COMMENT '作业ID',
   `student_id` BIGINT NOT NULL COMMENT '学生资料ID',
   `class_id` BIGINT NOT NULL COMMENT '班级ID',
-  `task_status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT '任务状态 pending submitted revision_required completed overdue',
+  `task_status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT '任务状态：pending submitted revision_required completed overdue',
   `latest_submission_id` BIGINT DEFAULT NULL COMMENT '最新提交ID',
   `submission_count` INT NOT NULL DEFAULT 0 COMMENT '提交次数',
   `latest_submitted_at` DATETIME DEFAULT NULL COMMENT '最近提交时间',
   `latest_review_status` VARCHAR(32) NOT NULL DEFAULT 'unreviewed' COMMENT '最近批改状态',
   `latest_reviewed_at` DATETIME DEFAULT NULL COMMENT '最近批改时间',
   `is_late` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逾期',
-  `is_deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+  `is_deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逻辑删除',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -208,13 +209,13 @@ CREATE TABLE IF NOT EXISTS `homework_submission` (
   `task_id` BIGINT NOT NULL COMMENT '学生作业任务ID',
   `homework_id` BIGINT NOT NULL COMMENT '作业ID',
   `student_id` BIGINT NOT NULL COMMENT '学生资料ID',
-  `operator_role` VARCHAR(32) NOT NULL COMMENT '操作人角色 student parent',
+  `operator_role` VARCHAR(32) NOT NULL COMMENT '操作人角色：student parent',
   `operator_user_id` BIGINT NOT NULL COMMENT '操作人账户ID',
   `submit_text` TEXT DEFAULT NULL COMMENT '提交说明',
   `submitted_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提交时间',
   `is_late` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否逾期',
   `version_no` INT NOT NULL DEFAULT 1 COMMENT '版本号',
-  `submit_status` VARCHAR(32) NOT NULL DEFAULT 'submitted' COMMENT '提交状态 submitted withdrawn',
+  `submit_status` VARCHAR(32) NOT NULL DEFAULT 'submitted' COMMENT '提交状态：submitted withdrawn',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   KEY `idx_submission_task` (`task_id`, `version_no`),
@@ -225,7 +226,7 @@ CREATE TABLE IF NOT EXISTS `homework_submission` (
 CREATE TABLE IF NOT EXISTS `homework_submission_asset` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `submission_id` BIGINT NOT NULL COMMENT '提交ID',
-  `asset_type` VARCHAR(32) NOT NULL COMMENT '文件类型 image file',
+  `asset_type` VARCHAR(32) NOT NULL COMMENT '文件类型：image file',
   `asset_url` VARCHAR(512) NOT NULL COMMENT '文件地址',
   `asset_name` VARCHAR(255) DEFAULT NULL COMMENT '文件名称',
   `asset_size` BIGINT DEFAULT NULL COMMENT '文件大小',
@@ -242,7 +243,7 @@ CREATE TABLE IF NOT EXISTS `homework_review` (
   `student_id` BIGINT NOT NULL COMMENT '学生资料ID',
   `submission_id` BIGINT NOT NULL COMMENT '对应提交ID',
   `reviewer_teacher_id` BIGINT NOT NULL COMMENT '批改教师账户ID',
-  `review_status` VARCHAR(32) NOT NULL COMMENT '批改状态 completed revision_required',
+  `review_status` VARCHAR(32) NOT NULL COMMENT '批改状态：completed revision_required',
   `score` DECIMAL(5,2) DEFAULT NULL COMMENT '分数',
   `score_level` VARCHAR(16) DEFAULT NULL COMMENT '等级',
   `comment_text` TEXT DEFAULT NULL COMMENT '评语',
@@ -267,14 +268,14 @@ CREATE TABLE IF NOT EXISTS `homework_review_asset` (
 
 CREATE TABLE IF NOT EXISTS `notification_record` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `biz_type` VARCHAR(32) NOT NULL COMMENT '业务类型 homework_publish deadline_reminder submission_reminder review_result',
+  `biz_type` VARCHAR(32) NOT NULL COMMENT '业务类型：homework_publish deadline_reminder submission_reminder review_result',
   `biz_id` BIGINT NOT NULL COMMENT '业务主键ID',
   `receiver_user_id` BIGINT NOT NULL COMMENT '接收人账户ID',
   `receiver_role` VARCHAR(32) NOT NULL COMMENT '接收人角色',
-  `notify_channel` VARCHAR(32) NOT NULL COMMENT '通知渠道 in_app wechat sms',
+  `notify_channel` VARCHAR(32) NOT NULL COMMENT '通知渠道：in_app wechat sms',
   `notify_title` VARCHAR(128) NOT NULL COMMENT '通知标题',
   `notify_content` VARCHAR(500) NOT NULL COMMENT '通知内容',
-  `send_status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT '发送状态 pending success failed',
+  `send_status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT '发送状态：pending success failed',
   `sent_at` DATETIME DEFAULT NULL COMMENT '发送时间',
   `read_at` DATETIME DEFAULT NULL COMMENT '阅读时间',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -298,4 +299,77 @@ CREATE TABLE IF NOT EXISTS `operation_log` (
   KEY `idx_operation_biz` (`biz_type`, `biz_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='操作日志表';
 
+
+CREATE TABLE IF NOT EXISTS `mobile_preference` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `role_type` VARCHAR(32) NOT NULL COMMENT 'student parent',
+  `master_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `assignment_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `review_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `reminder_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `system_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `sound_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `vibration_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `quiet_hours_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+  `quiet_start` VARCHAR(8) NOT NULL DEFAULT '22:00',
+  `quiet_end` VARCHAR(8) NOT NULL DEFAULT '07:00',
+  `hide_account_identifier` TINYINT(1) NOT NULL DEFAULT 0,
+  `remember_account` TINYINT(1) NOT NULL DEFAULT 1,
+  `login_alert_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `app_lock_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+  `biometric_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+  `password_checked_at` DATETIME DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_mobile_preference_user_role` (`user_id`, `role_type`),
+  KEY `idx_mobile_preference_role` (`role_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='移动端设置表';
+
+CREATE TABLE IF NOT EXISTS `wrong_book_item` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `school_id` BIGINT NOT NULL,
+  `student_id` BIGINT NOT NULL,
+  `homework_id` BIGINT DEFAULT NULL,
+  `task_id` BIGINT DEFAULT NULL,
+  `submission_id` BIGINT DEFAULT NULL,
+  `review_id` BIGINT DEFAULT NULL,
+  `subject_code` VARCHAR(32) DEFAULT NULL,
+  `source_type` VARCHAR(32) DEFAULT NULL,
+  `question_no` VARCHAR(64) DEFAULT NULL,
+  `question_text` TEXT DEFAULT NULL,
+  `student_answer` TEXT DEFAULT NULL,
+  `correct_answer` TEXT DEFAULT NULL,
+  `analysis_text` TEXT DEFAULT NULL,
+  `wrong_reason_code` VARCHAR(64) DEFAULT NULL,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'active',
+  `added_by_user_id` BIGINT DEFAULT NULL,
+  `added_by_role` VARCHAR(32) DEFAULT NULL,
+  `recognized_confidence` DECIMAL(5,2) DEFAULT NULL,
+  `last_fixed_text` TEXT DEFAULT NULL,
+  `last_fixed_at` DATETIME DEFAULT NULL,
+  `fix_count` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_wrong_book_student_status` (`student_id`, `status`),
+  KEY `idx_wrong_book_homework` (`homework_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='错题本条目表';
+
+CREATE TABLE IF NOT EXISTS `wrong_book_asset` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `wrong_book_id` BIGINT NOT NULL,
+  `asset_role` VARCHAR(32) NOT NULL,
+  `asset_type` VARCHAR(32) NOT NULL,
+  `asset_url` VARCHAR(512) NOT NULL,
+  `asset_name` VARCHAR(255) DEFAULT NULL,
+  `sort_no` INT NOT NULL DEFAULT 1,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_wrong_book_asset_wrong_book` (`wrong_book_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='错题本附件表';
 SET FOREIGN_KEY_CHECKS = 1;
+
+
+

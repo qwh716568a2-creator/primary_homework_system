@@ -1,13 +1,26 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { assignmentStateMap, reviewStatusMap, submissionStatusMap } from '@/utils/teacher-portal'
+import { assignmentStateMap, reviewStatusMap, submissionStatusMap } from '@/utils/teacher-portal-view'
+import { studentHomeworkStatusMap, studentReviewStatusMap, studentWrongBookStatusMap } from '@/utils/student-portal-view'
 
 const props = defineProps<{
-  kind: 'assignment' | 'submission' | 'review'
+  kind: 'assignment' | 'submission' | 'review' | 'student-homework' | 'student-review' | 'wrong-book'
   value: string
 }>()
 
 const config = computed(() => {
+  if (props.kind === 'student-homework') {
+    return studentHomeworkStatusMap[props.value as keyof typeof studentHomeworkStatusMap]
+  }
+
+  if (props.kind === 'student-review') {
+    return studentReviewStatusMap[props.value as keyof typeof studentReviewStatusMap]
+  }
+
+  if (props.kind === 'wrong-book') {
+    return studentWrongBookStatusMap[props.value as keyof typeof studentWrongBookStatusMap]
+  }
+
   if (props.kind === 'assignment') {
     return assignmentStateMap[props.value as keyof typeof assignmentStateMap]
   }

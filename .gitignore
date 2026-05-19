@@ -1,0 +1,42 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+
+# root temp files
+.codex-skill-staging/
+tmp-upload*.txt
+vite-dev.log
+22021601454-*.doc
+
+# frontend
+front-end/node_modules/
+front-end/dist/
+front-end/.vite/
+front-end/*.log
+front-end/*.err
+front-end/*.tsbuildinfo
+
+# backend
+back-end/target/
+back-end/.m2/
+back-end/uploads/
+back-end/*.log
+back-end/*.err
+back-end/*.out
+
+# mobile
+mobile-end/node_modules/
+mobile-end/dist/
+mobile-end/.hbuilderx/
+mobile-end/*.log
+mobile-end/*.err
+
+# env files
+.env
+.env.*
+!.env.example
+!back-end/.env.prod.example
+!mobile-end/.env.production

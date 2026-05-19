@@ -1,0 +1,211 @@
+:root {
+  --brand-blue: #2f7cff;
+  --brand-blue-soft: #58b5ff;
+  --brand-teal: #1cb8a3;
+  --text-strong: #10233f;
+  --text-primary: #244165;
+  --text-secondary: #6881a2;
+}
+
+page {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top left, rgba(97, 195, 255, 0.22), transparent 38%),
+    linear-gradient(180deg, #eef6ff 0%, #f8fbff 100%);
+  color: var(--text-primary);
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+view,
+text,
+button,
+input,
+textarea {
+  box-sizing: border-box;
+}
+
+button::after {
+  border: none;
+}
+
+.mobile-page {
+  min-height: 100vh;
+  padding: calc(44rpx + env(safe-area-inset-top)) 28rpx calc(160rpx + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at top left, rgba(97, 195, 255, 0.18), transparent 34%),
+    linear-gradient(180deg, #eef6ff 0%, #f8fbff 100%);
+}
+
+.mobile-page--auth {
+  padding-bottom: calc(52rpx + env(safe-area-inset-bottom));
+}
+
+.shell-card {
+  border-radius: 32rpx;
+  background: rgba(255, 255, 255, 0.86);
+  border: 2rpx solid rgba(255, 255, 255, 0.84);
+  box-shadow: 0 28rpx 70rpx rgba(30, 74, 132, 0.1);
+  backdrop-filter: blur(18rpx);
+}
+
+.glass-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--brand-blue);
+  font-size: 22rpx;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.section-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.muted-copy {
+  color: var(--text-secondary);
+  font-size: 24rpx;
+  line-height: 1.7;
+}
+
+.field-panel {
+  padding: 24rpx;
+  border-radius: 24rpx;
+  background: rgba(244, 248, 255, 0.78);
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.field-input,
+.textarea-panel {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 28rpx;
+}
+
+.field-placeholder {
+  color: #9aaec8;
+}
+
+.textarea-panel {
+  min-height: 180rpx;
+}
+
+.primary-button,
+.secondary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 92rpx;
+  padding: 0 28rpx;
+  border-radius: 28rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #2f7cff 0%, #58b5ff 100%);
+  color: #ffffff;
+  box-shadow: 0 20rpx 48rpx rgba(47, 124, 255, 0.26);
+}
+
+.secondary-button {
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text-strong);
+  border: 2rpx solid rgba(203, 221, 243, 0.85);
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  font-weight: 700;
+}
+
+.status-pending {
+  background: rgba(255, 176, 47, 0.16);
+  color: #cb7f00;
+}
+
+.status-submitted {
+  background: rgba(47, 124, 255, 0.12);
+  color: var(--brand-blue);
+}
+
+.status-revision {
+  background: rgba(255, 116, 128, 0.14);
+  color: #da5260;
+}
+
+.status-completed {
+  background: rgba(26, 184, 122, 0.14);
+  color: #169b68;
+}
+
+.status-overdue {
+  background: rgba(62, 72, 92, 0.14);
+  color: #51627c;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.detail-header__back {
+  min-width: 96rpx;
+  font-size: 24rpx;
+  color: var(--text-secondary);
+}
+
+.detail-header__back--ghost {
+  opacity: 0;
+}
+
+.detail-header__title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  align-items: center;
+  justify-content: center;
+  padding: 80rpx 36rpx;
+  text-align: center;
+}
+
+.empty-state__title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.empty-state__copy {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}

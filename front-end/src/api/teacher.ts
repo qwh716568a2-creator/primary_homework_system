@@ -1,14 +1,22 @@
-import { requestJson } from '@/api/teacher-http'
+﻿import { getAuthSession } from '@/utils/auth-session-clean'
+import { requestJson } from '@/api/teacher-http-clean'
 import type {
   AssignmentFormInput,
+  HomeworkAsset,
   HomeworkDetail,
   HomeworkListItem,
   HomeworkListQuery,
   HomeworkOverviewStats,
+  TeacherWrongBookItemInput,
   HomeworkStatsQuery,
+  TeacherMessageFormInput,
+  TeacherMessageQuery,
+  TeacherMessageRecord,
   HomeworkTaskDetail,
   HomeworkTaskListItem,
   HomeworkTaskQuery,
+  TeacherClassBindingCandidate,
+  TeacherClassBindingPayload,
   TeachingClassRelation
 } from '@/types/teacher-portal'
 
@@ -17,6 +25,12 @@ interface PagedData<T> {
   total: number
   pageNo?: number
   pageSize?: number
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? ''
+
+function buildUrl(path: string) {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path
 }
 
 function withQuery(path: string, params: Record<string, string | number | undefined>) {
@@ -48,12 +62,40 @@ function buildHomeworkPayload(form: AssignmentFormInput, publishNow: boolean) {
   }
 }
 
+function buildTeacherMessagePayload(form: TeacherMessageFormInput) {
+  return {
+    bizType: form.bizType,
+    scopeType: form.scopeType,
+    homeworkId: form.homeworkId,
+    classIds: form.classIds,
+    receiverRole: form.receiverRole,
+    notifyChannels: form.notifyChannels,
+    notifyTitle: form.notifyTitle.trim(),
+    notifyContent: form.notifyContent.trim()
+  }
+}
+
 export async function fetchTeachingClasses(subjectCode?: string) {
   return requestJson<TeachingClassRelation[]>(
     withQuery('/api/teacher/classes', {
       subjectCode
     })
   )
+}
+
+export async function fetchTeacherBindingCandidates(keyword?: string) {
+  return requestJson<TeacherClassBindingCandidate[]>(
+    withQuery('/api/teacher/class-bindings/candidates', {
+      keyword
+    })
+  )
+}
+
+export async function createTeacherClassBinding(payload: TeacherClassBindingPayload) {
+  return requestJson<void>('/api/teacher/class-bindings', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
 }
 
 export async function fetchTeacherHomeworks(query: HomeworkListQuery = {}) {
@@ -109,6 +151,12 @@ export async function revokeTeacherHomework(homeworkId: number | string, reason:
   })
 }
 
+export async function deleteTeacherHomework(homeworkId: number | string) {
+  return requestJson<void>(`/api/teacher/homeworks/${homeworkId}`, {
+    method: 'DELETE'
+  })
+}
+
 export async function fetchTeacherHomeworkDetail(homeworkId: number | string) {
   return requestJson<HomeworkDetail>(`/api/teacher/homeworks/${homeworkId}`)
 }
@@ -137,6 +185,8 @@ export async function submitTeacherTaskReview(
     score?: number
     scoreLevel?: string
     commentText?: string
+    reviewAssets?: HomeworkAsset[]
+    wrongItems?: TeacherWrongBookItemInput[]
   }
 ) {
   return requestJson<void>(`/api/teacher/tasks/${taskId}/reviews`, {
@@ -170,4 +220,74 @@ export async function fetchTeacherHomeworkOverview(query: HomeworkStatsQuery = {
       endDate: query.endDate
     })
   )
+}
+
+export async function fetchTeacherMessageRecords(query: TeacherMessageQuery = {}) {
+  return requestJson<PagedData<TeacherMessageRecord>>(
+    withQuery('/api/teacher/messages', {
+      keyword: query.keyword,
+      bizType: query.bizType,
+      sendStatus: query.sendStatus,
+      pageNo: query.pageNo ?? 1,
+      pageSize: query.pageSize ?? 20
+    })
+  )
+}
+
+export async function createTeacherMessage(form: TeacherMessageFormInput) {
+  return requestJson<{ messageId: number | string }>('/api/teacher/messages', {
+    method: 'POST',
+    body: JSON.stringify(buildTeacherMessagePayload(form))
+  })
+}
+
+export async function sendTeacherMessage(form: TeacherMessageFormInput) {
+  return requestJson<{ messageId?: number | string } | void>('/api/teacher/messages/send', {
+    method: 'POST',
+    body: JSON.stringify(buildTeacherMessagePayload(form))
+  })
+}
+
+export async function deleteTeacherMessage(messageId: number | string) {
+  return requestJson<void>(`/api/teacher/messages/${messageId}`, {
+    method: 'DELETE'
+  })
+}
+
+export async function uploadTeacherFile(file: File, bizType: string) {
+  const session = getAuthSession()
+  const formData = new FormData()
+
+  formData.set('file', file)
+  formData.set('bizType', bizType)
+
+  let response: Response
+
+  try {
+    response = await fetch(buildUrl('/api/files/upload'), {
+      method: 'POST',
+      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : undefined,
+      body: formData
+    })
+  } catch {
+    throw new Error('无法连接文件上传服务，请稍后重试。')
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | { code?: number; message?: string; data?: { fileUrl: string; fileName?: string; fileSize?: number } }
+    | null
+
+  if (!response.ok) {
+    throw new Error(payload?.message || '图片上传失败，请稍后重试。')
+  }
+
+  if (typeof payload?.code === 'number' && payload.code !== 0) {
+    throw new Error(payload.message || '图片上传失败，请稍后重试。')
+  }
+
+  if (!payload?.data?.fileUrl) {
+    throw new Error('上传接口未返回文件地址。')
+  }
+
+  return payload.data
 }

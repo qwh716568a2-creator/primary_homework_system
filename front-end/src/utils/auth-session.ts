@@ -3,6 +3,7 @@ import type { AuthSession, RegistrationDraft, UserRole } from '@/types/auth'
 const AUTH_STORAGE_KEY = 'primary-homework-auth'
 const AUTH_SESSION_STORAGE_KEY = 'primary-homework-auth-session'
 const REGISTRATION_DRAFT_KEY = 'primary-homework-registration-drafts'
+const USE_MOCK_AUTH = import.meta.env.VITE_USE_MOCK_AUTH === 'true'
 
 export const roleMeta: Record<
   UserRole,
@@ -128,10 +129,33 @@ export function getAuthSession() {
   const sessionValue = parseStoredJson<AuthSession | null>(getSessionStorage(), AUTH_SESSION_STORAGE_KEY, null)
 
   if (sessionValue) {
+    if (!USE_MOCK_AUTH && isMockSession(sessionValue)) {
+      clearAuthSession()
+      return null
+    }
     return sessionValue
   }
 
-  return parseStoredJson<AuthSession | null>(getLocalStorage(), AUTH_STORAGE_KEY, null)
+  const persistedSession = parseStoredJson<AuthSession | null>(getLocalStorage(), AUTH_STORAGE_KEY, null)
+
+  if (!USE_MOCK_AUTH && persistedSession && isMockSession(persistedSession)) {
+    clearAuthSession()
+    return null
+  }
+
+  return persistedSession
+}
+
+function isMockSession(session: AuthSession) {
+  const token = `${session.token ?? ''}`
+  const permissions = session.permissions ?? []
+  const usesLegacyMockPrefix = token.startsWith('mock-jwt-token-') || token.startsWith('local-mock-token-')
+  const looksLikeOldFrontendMock =
+    token.startsWith('mock-token-') &&
+    permissions.length === 0 &&
+    ['示例小学', '平台管理端', '校内统一认证'].includes(`${session.school ?? ''}`)
+
+  return usesLegacyMockPrefix || looksLikeOldFrontendMock
 }
 
 export function persistAuthSession(session: AuthSession, remember = true) {
@@ -155,5 +179,13 @@ export function clearAuthSession() {
 }
 
 export function getDefaultRouteForRole(role: UserRole) {
-  return role === 'teacher' ? '/dashboard' : '/access-hub'
+  if (role === 'teacher') {
+    return '/dashboard'
+  }
+
+  if (role === 'admin') {
+    return '/admin/dashboard'
+  }
+
+  return '/login'
 }

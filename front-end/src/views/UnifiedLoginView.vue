@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Lock, School, User } from '@element-plus/icons-vue'
-import { inferLoginClientType, loginByPassword, registerAccount } from '@/api/auth'
+import { loginByPassword, registerAccount } from '@/api/auth-service'
 import { useTeacherPortalStore } from '@/stores/teacherPortalApi'
 import { getDefaultRouteForRole, roleMeta } from '@/utils/auth-session'
 
@@ -18,6 +18,8 @@ const loginError = ref('')
 const rememberMe = ref(true)
 
 const loginForm = reactive({
+  loginType: 'teacher' as 'teacher' | 'admin' | 'student' | 'parent',
+  schoolId: '',
   account: '',
   password: ''
 })
@@ -38,18 +40,15 @@ const registerRoleOptions = computed(() =>
   }))
 )
 
+const requiresSchoolId = computed(() => loginForm.loginType === 'student')
+
 const loginAccountPlaceholder = computed(() => {
-  const inferredType = inferLoginClientType(loginForm.account)
-
-  if (inferredType === 'teacher-web') {
-    return '请输入手机号'
+  switch (loginForm.loginType) {
+    case 'student': return '请输入学生学号 (例如：30101)'
+    case 'parent': return '请输入家长预留手机号'
+    case 'teacher': return '请输入教师工号或手机号'
+    default: return '请输入登录账号'
   }
-
-  if (inferredType === 'admin-web') {
-    return '请输入管理员账号'
-  }
-
-  return '学生请输入学号，教师/家长请输入手机号'
 })
 
 const registerAccountPlaceholder = computed(() =>
@@ -85,13 +84,21 @@ async function submitLogin() {
     return
   }
 
+  if (requiresSchoolId.value && !`${loginForm.schoolId}`.trim()) {
+    loginError.value = '学生登录需要填写学校 ID。'
+    ElMessage.warning(loginError.value)
+    return
+  }
+
   loading.value = true
   loginError.value = ''
 
   try {
     const session = await loginByPassword({
       account: loginForm.account,
-      password: loginForm.password
+      password: loginForm.password,
+      loginType: loginForm.loginType,
+      schoolId: requiresSchoolId.value ? loginForm.schoolId : null
     })
 
     store.setAuthenticatedUser(session, { remember: rememberMe.value })
@@ -178,6 +185,24 @@ async function submitRegister() {
           <el-alert v-if="loginError" :closable="false" type="error" :title="loginError" show-icon />
 
           <div class="immersive-auth-inputs">
+            <el-select v-model="loginForm.loginType" size="large" placeholder="选择身份" class="mb-2">
+              <el-option label="学生" value="student" />
+              <el-option label="家长" value="parent" />
+              <el-option label="教师" value="teacher" />
+            </el-select>
+
+            <el-input
+              v-if="requiresSchoolId"
+              v-model="loginForm.schoolId"
+              size="large"
+              clearable
+              placeholder="学生登录请输入学校 ID"
+            >
+              <template #prefix>
+                <el-icon><School /></el-icon>
+              </template>
+            </el-input>
+
             <el-input
               v-model="loginForm.account"
               size="large"

@@ -40,7 +40,7 @@ const menuItems = [
   {
     label: '批改中心',
     caption: '进入最近批改任务',
-    to: '/assignments',
+    to: '/assignments/grading',
     icon: Promotion
   },
   {
@@ -72,7 +72,7 @@ function logout() {
         <div class="brand-badge">T</div>
         <div>
           <strong>Teacher Portal</strong>
-          <p>{{ store.teacher.school }}</p>
+          <p>{{ store.teacher?.school || '未来小学' }}</p>
         </div>
       </div>
 
@@ -92,12 +92,6 @@ function logout() {
           </span>
         </router-link>
       </nav>
-
-      <div class="sidebar-footer">
-        <p class="sidebar-eyebrow">当前提醒</p>
-        <strong>{{ store.reviewQueue.length }} 条待处理批改</strong>
-        <p>建议先处理近 24 小时内的提交，避免学生等待反馈过久。</p>
-      </div>
     </aside>
 
     <div class="shell-main">
@@ -115,15 +109,15 @@ function logout() {
         <div class="topbar-right">
           <el-button round type="primary" @click="router.push('/assignments/new')">发布作业</el-button>
           <div class="teacher-chip">
-            <span class="teacher-avatar">{{ store.teacher.avatar }}</span>
+            <span class="teacher-avatar">{{ store.teacher?.avatar || '👨‍🏫' }}</span>
             <div>
-              <strong>{{ store.authUser?.name || store.teacher.name }}</strong>
+              <strong>{{ store.authUser?.name || store.teacher?.name || '老师' }}</strong>
               <small>
-                {{ store.authUser ? `${roleMeta[store.authUser.role].label} · ${store.authUser.school}` : store.teacher.role }}
+                {{ store.authUser ? `${roleMeta[store.authUser.role]?.label || '教师'} · ${store.authUser.school}` : store.teacher?.role }}
               </small>
             </div>
           </div>
-          <el-button circle @click="logout">
+          <el-button circle @click="logout" title="退出登录">
             <el-icon><SwitchButton /></el-icon>
           </el-button>
         </div>
@@ -138,25 +132,31 @@ function logout() {
 
 <style scoped>
 .teacher-shell {
-  display: grid;
-  grid-template-columns: 292px minmax(0, 1fr);
+  display: flex;
   min-height: 100vh;
-  align-items: start;
+  align-items: flex-start;
+  gap: 1.5rem;
+  padding: 1.5rem;
 }
 
 .shell-sidebar {
   position: sticky;
-  top: 0;
+  flex-shrink: 0;
+  top: 1.5rem;
   z-index: 12;
   display: flex;
   flex-direction: column;
   gap: 1.4rem;
   padding: 1.5rem;
-  height: 100vh;
-  overflow-y: auto;
-  background:
-    linear-gradient(180deg, rgba(16, 47, 73, 0.98), rgba(17, 63, 95, 0.98)),
-    radial-gradient(circle at top, rgba(100, 215, 226, 0.3), transparent 45%);
+  height: calc(100vh - 3rem);
+  width: 290px;
+  border-radius: 32px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.3);
   color: white;
 }
 
@@ -204,10 +204,7 @@ function logout() {
   padding: 0.95rem 1rem;
   border-radius: 18px;
   color: rgba(255, 255, 255, 0.82);
-  transition:
-    background 0.2s ease,
-    transform 0.2s ease,
-    color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .nav-item strong,
@@ -228,8 +225,9 @@ function logout() {
 .nav-item:hover,
 .nav-item-active {
   color: white;
-  background: rgba(255, 255, 255, 0.1);
-  transform: translateX(2px);
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.85), rgba(79, 70, 229, 0.95));
+  box-shadow: 0 10px 20px -8px rgba(99, 102, 241, 0.5);
+  transform: translateX(4px);
 }
 
 .sidebar-footer {
@@ -259,9 +257,9 @@ function logout() {
 .shell-main {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-width: 0;
-  min-height: 100vh;
-  padding: 1.4rem;
+  min-height: calc(100vh - 3rem);
 }
 
 .shell-topbar {
@@ -269,7 +267,14 @@ function logout() {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1rem 1.2rem;
+  padding: 1rem 1.4rem;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.05);
+  margin-bottom: 1.5rem;
 }
 
 .topbar-left {
@@ -334,22 +339,23 @@ function logout() {
 
 .shell-content {
   min-width: 0;
-  padding-top: 1.25rem;
+  flex: 1;
 }
 
 @media (max-width: 1100px) {
   .teacher-shell {
-    grid-template-columns: 1fr;
+    padding: 1rem;
   }
 
   .shell-sidebar {
     position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: min(320px, 88vw);
-    transform: translateX(-105%);
-    transition: transform 0.24s ease;
+    top: 1rem;
+    left: 1rem;
+    bottom: 1rem;
+    height: calc(100vh - 2rem);
+    width: min(300px, 88vw);
+    transform: translateX(-120%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .shell-sidebar-open {
@@ -362,10 +368,6 @@ function logout() {
 }
 
 @media (max-width: 760px) {
-  .shell-main {
-    padding: 1rem;
-  }
-
   .shell-topbar {
     flex-direction: column;
     align-items: stretch;

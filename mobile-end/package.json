@@ -1,0 +1,32 @@
+{
+  "name": "primary-homework-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "小学课后作业系统学生端/家长端 uni-app 工程",
+  "scripts": {
+    "dev:h5": "uni -p h5",
+    "build:h5": "uni build -p h5",
+    "dev:mp-weixin": "uni -p mp-weixin",
+    "build:mp-weixin": "uni build -p mp-weixin",
+    "type-check": "vue-tsc --noEmit",
+    "postinstall": "node scripts/patch-uni-app.mjs"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-5000720260408001",
+    "@dcloudio/uni-mp-weixin": "3.0.0-5000720260408001",
+    "@vue/compiler-sfc": "3.5.13",
+    "pinia": "3.0.4",
+    "vue": "3.5.13"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "3.4.28",
+    "@dcloudio/vite-plugin-uni": "3.0.0-5000720260408001",
+    "@types/node": "24.0.0",
+    "typescript": "5.6.3",
+    "vite": "5.4.11",
+    "vue-tsc": "2.1.10"
+  },
+  "overrides": {
+    "@vue/shared": "3.5.13"
+  }
+}

@@ -1,13 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import TeacherShell from '@/layouts/TeacherShell.vue'
-import AccessHubView from '@/views/AccessHubView.vue'
-import TeacherAssignmentDetailView from '@/views/TeacherAssignmentDetailView.vue'
-import TeacherAssignmentFormView from '@/views/TeacherAssignmentFormView.vue'
-import TeacherAssignmentListView from '@/views/TeacherAssignmentListView.vue'
+import AdminShell from '@/layouts/AdminShell.vue'
 import TeacherDashboardView from '@/views/TeacherDashboardView.vue'
-import TeacherGradingView from '@/views/TeacherGradingView.vue'
+import TeacherAssignmentDetailView from '@/views/TeacherAssignmentDetailBusinessView.vue'
+import TeacherAssignmentListView from '@/views/TeacherAssignmentListBusinessView.vue'
+import TeacherAssignmentFormView from '@/views/TeacherAssignmentFormPage.vue'
+import TeacherStatisticsView from '@/views/TeacherStatisticsPage.vue'
+import TeacherGradingView from '@/views/TeacherGradingPage.vue'
 import LoginView from '@/views/UnifiedLoginView.vue'
-import TeacherStatisticsView from '@/views/TeacherStatisticsView.vue'
+import AdminLoginView from '@/views/AdminLoginPage.vue'
+import AdminDashboardPage from '@/views/AdminDashboardPage.vue'
+import AdminOrganizationPage from '@/views/AdminOrganizationPage.vue'
+import AdminAccountsPage from '@/views/AdminAccountsPage.vue'
+import AdminRelationsPage from '@/views/AdminRelationsPage.vue'
 import { getAuthSession, getDefaultRouteForRole } from '@/utils/auth-session'
 
 const router = createRouter({
@@ -20,10 +25,10 @@ const router = createRouter({
       meta: { title: '统一登录中心', public: true }
     },
     {
-      path: '/access-hub',
-      name: 'access-hub',
-      component: AccessHubView,
-      meta: { title: '角色入口', requiresAuth: true }
+      path: '/admin/login',
+      name: 'admin-login',
+      component: AdminLoginView,
+      meta: { title: '管理后台登录', public: true }
     },
     {
       path: '/',

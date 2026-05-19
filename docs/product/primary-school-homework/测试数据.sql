@@ -1,20 +1,20 @@
-USE `primary_homework_system`;
+﻿USE `primary_homework`;
 
 START TRANSACTION;
 
 -- 说明：
 -- 1. 这组 SQL 默认运行在空的测试库中。
 -- 2. password_hash 先使用演示值 123456，如你的登录逻辑要求加密，请后续替换为实际密文。
--- 3. 管理员使用 user_account.login_name 登录，教师使用 teacher_profile.mobile 登录，
---    家长使用 parent_profile.mobile 登录，学生使用 student_profile.student_no 登录。
+-- 3. 管理员使用 user_account.login_name 登录，教师使用 user_teacher.mobile 登录，
+--    家长使用 user_parent.mobile 登录，学生使用 user_student.student_no 登录。
 -- 4. 数据日期基于 2026-04-02 构造，包含已完成、待订正、待批改、逾期未交、逾期已交等典型状态。
 
-INSERT INTO `organization_school`
+INSERT INTO `school`
 (`id`, `school_name`, `school_code`, `status`, `created_at`, `updated_at`)
 VALUES
 (1, '阳光实验小学', 'SCH001', 'enabled', '2026-03-01 08:00:00', '2026-03-01 08:00:00');
 
-INSERT INTO `organization_grade`
+INSERT INTO `school_grade`
 (`id`, `school_id`, `grade_name`, `school_year`, `status`, `created_at`, `updated_at`)
 VALUES
 (11, 1, '三年级', '2025-2026', 'enabled', '2026-03-01 08:10:00', '2026-03-01 08:10:00'),
@@ -40,14 +40,14 @@ VALUES
 (30005, NULL, '123456', '孙一诺爸爸', 'parent', 1, 'enabled', '2026-04-02 17:01:00', '2026-03-02 10:30:00', '2026-04-02 17:01:00'),
 (30006, NULL, '123456', '赵思远妈妈', 'parent', 1, 'enabled', '2026-04-02 08:31:00', '2026-03-02 10:30:00', '2026-04-02 08:31:00');
 
-INSERT INTO `teacher_profile`
+INSERT INTO `user_teacher`
 (`id`, `teacher_user_id`, `school_id`, `teacher_no`, `mobile`, `gender`, `created_at`, `updated_at`)
 VALUES
 (41001, 10002, 1, 'T301001', '13900000002', 'female', '2026-03-01 09:20:00', '2026-03-01 09:20:00'),
 (41002, 10003, 1, 'T301002', '13900000003', 'female', '2026-03-01 09:20:00', '2026-03-01 09:20:00'),
 (41003, 10004, 1, 'T401001', '13900000004', 'female', '2026-03-01 09:20:00', '2026-03-01 09:20:00');
 
-INSERT INTO `parent_profile`
+INSERT INTO `user_parent`
 (`id`, `parent_user_id`, `school_id`, `mobile`, `gender`, `created_at`, `updated_at`)
 VALUES
 (42001, 30001, 1, '13710000001', 'female', '2026-03-02 10:40:00', '2026-03-02 10:40:00'),
@@ -57,14 +57,14 @@ VALUES
 (42005, 30005, 1, '13710000005', 'male', '2026-03-02 10:40:00', '2026-03-02 10:40:00'),
 (42006, 30006, 1, '13710000006', 'female', '2026-03-02 10:40:00', '2026-03-02 10:40:00');
 
-INSERT INTO `organization_class`
+INSERT INTO `school_class`
 (`id`, `school_id`, `grade_id`, `class_name`, `class_code`, `homeroom_teacher_id`, `status`, `created_at`, `updated_at`)
 VALUES
-(101, 1, 11, '三年级(1)班', 'C301', 10002, 'enabled', '2026-03-01 09:30:00', '2026-03-01 09:30:00'),
-(102, 1, 11, '三年级(2)班', 'C302', 10003, 'enabled', '2026-03-01 09:30:00', '2026-03-01 09:30:00'),
-(201, 1, 12, '四年级(1)班', 'C401', 10004, 'enabled', '2026-03-01 09:30:00', '2026-03-01 09:30:00');
+(101, 1, 11, '三年级（1）班', 'C301', 10002, 'enabled', '2026-03-01 09:30:00', '2026-03-01 09:30:00'),
+(102, 1, 11, '三年级（2）班', 'C302', 10003, 'enabled', '2026-03-01 09:30:00', '2026-03-01 09:30:00'),
+(201, 1, 12, '四年级（1）班', 'C401', 10004, 'enabled', '2026-03-01 09:30:00', '2026-03-01 09:30:00');
 
-INSERT INTO `student_profile`
+INSERT INTO `user_student`
 (`id`, `student_user_id`, `school_id`, `grade_id`, `class_id`, `student_no`, `gender`, `status`, `created_at`, `updated_at`)
 VALUES
 (40001, 20001, 1, 11, 101, '30101', 'female', 'enabled', '2026-03-02 11:00:00', '2026-03-02 11:00:00'),
@@ -74,7 +74,7 @@ VALUES
 (40005, 20005, 1, 11, 102, '30202', 'female', 'enabled', '2026-03-02 11:00:00', '2026-03-02 11:00:00'),
 (40006, 20006, 1, 12, 201, '40101', 'male', 'enabled', '2026-03-02 11:00:00', '2026-03-02 11:00:00');
 
-INSERT INTO `teacher_class_subject_rel`
+INSERT INTO `user_teacher_class_subject`
 (`id`, `teacher_id`, `class_id`, `subject_code`, `is_head_teacher`, `status`, `created_at`, `updated_at`)
 VALUES
 (45001, 10002, 101, 'math', 1, 'enabled', '2026-03-03 08:00:00', '2026-03-03 08:00:00'),
@@ -83,7 +83,7 @@ VALUES
 (45004, 10003, 102, 'math', 0, 'enabled', '2026-03-03 08:00:00', '2026-03-03 08:00:00'),
 (45005, 10004, 201, 'english', 1, 'enabled', '2026-03-03 08:00:00', '2026-03-03 08:00:00');
 
-INSERT INTO `parent_student_rel`
+INSERT INTO `user_parent_student`
 (`id`, `parent_user_id`, `student_id`, `relation_type`, `is_primary`, `status`, `created_at`, `updated_at`)
 VALUES
 (46001, 30001, 40001, 'mother', 1, 'enabled', '2026-03-03 08:30:00', '2026-03-03 08:30:00'),
@@ -96,8 +96,8 @@ VALUES
 INSERT INTO `homework`
 (`id`, `school_id`, `creator_teacher_id`, `subject_code`, `title`, `content_text`, `deadline_at`, `allow_late_submit`, `allow_resubmit`, `submit_type_mask`, `need_parent_confirm`, `status`, `published_at`, `created_at`, `updated_at`)
 VALUES
-(50001, 1, 10002, 'math', '数学口算练习', '完成课后练习第3、4页，拍照上传。', '2026-04-03 20:00:00', 1, 1, 'text,image', 0, 'published', '2026-04-02 16:30:00', '2026-04-02 16:20:00', '2026-04-02 16:30:00'),
-(50002, 1, 10003, 'chinese', '语文生字抄写', '抄写第8课生字每个3遍，并朗读课文。', '2026-04-02 18:00:00', 1, 1, 'text,image', 1, 'published', '2026-04-02 09:00:00', '2026-04-02 08:50:00', '2026-04-02 09:00:00'),
+(50001, 1, 10002, 'math', '数学口算练习', '完成课后练习第1、2页，拍照上传。', '2026-04-03 20:00:00', 1, 1, 'text,image', 0, 'published', '2026-04-02 16:30:00', '2026-04-02 16:20:00', '2026-04-02 16:30:00'),
+(50002, 1, 10003, 'chinese', '语文生字抄写', '抄写第3课生字每个3遍，并朗读课文。', '2026-04-02 18:00:00', 1, 1, 'text,image', 1, 'published', '2026-04-02 09:00:00', '2026-04-02 08:50:00', '2026-04-02 09:00:00'),
 (50003, 1, 10004, 'english', '英语单词默写', '默写 Unit 3 单词并拍照上传。', '2026-04-01 18:00:00', 1, 1, 'image', 0, 'published', '2026-03-31 17:00:00', '2026-03-31 16:50:00', '2026-03-31 17:00:00'),
 (50004, 1, 10002, 'math', '周末拓展题', '完成拓展练习单第1页，周末前完成。', '2026-04-05 20:00:00', 1, 1, 'text,file', 0, 'draft', NULL, '2026-04-02 18:00:00', '2026-04-02 18:00:00');
 
@@ -108,7 +108,7 @@ VALUES
 (60002, 50002, 'image', 'https://oss.example.com/homework/20260402/chinese-demo.jpg', '生字示例.jpg', 204800, 1, '2026-04-02 08:55:00'),
 (60003, 50003, 'file', 'https://oss.example.com/homework/20260331/english-word-list.pdf', '英语单词表.pdf', 51200, 1, '2026-03-31 16:55:00');
 
-INSERT INTO `homework_class_rel`
+INSERT INTO `homework_class`
 (`id`, `homework_id`, `class_id`, `created_at`)
 VALUES
 (70001, 50001, 101, '2026-04-02 16:30:00'),
@@ -116,7 +116,7 @@ VALUES
 (70003, 50003, 201, '2026-03-31 17:00:00'),
 (70004, 50004, 101, '2026-04-02 18:00:00');
 
-INSERT INTO `student_homework_task`
+INSERT INTO `homework_task`
 (`id`, `homework_id`, `student_id`, `class_id`, `task_status`, `latest_submission_id`, `submission_count`, `latest_submitted_at`, `latest_review_status`, `latest_reviewed_at`, `is_late`, `is_deleted`, `created_at`, `updated_at`)
 VALUES
 (80001, 50001, 40001, 101, 'completed', 90001, 1, '2026-04-02 19:10:00', 'completed', '2026-04-02 20:30:00', 0, 0, '2026-04-02 16:31:00', '2026-04-02 20:30:00'),
@@ -145,8 +145,8 @@ VALUES
 INSERT INTO `homework_review`
 (`id`, `task_id`, `homework_id`, `student_id`, `submission_id`, `reviewer_teacher_id`, `review_status`, `score`, `score_level`, `comment_text`, `reviewed_at`, `created_at`)
 VALUES
-(92001, 80001, 50001, 40001, 90001, 10002, 'completed', 95.00, 'A', '完成很好，书写整洁。', '2026-04-02 20:30:00', '2026-04-02 20:30:00'),
-(92002, 80002, 50001, 40002, 90002, 10002, 'revision_required', 78.00, 'B', '第4页有两道题计算错误，请订正后重新提交。', '2026-04-02 20:40:00', '2026-04-02 20:40:00'),
+(92001, 80001, 50001, 40001, 90001, 10002, 'completed', 95.00, 'A', '完成得很好，书写整洁。', '2026-04-02 20:30:00', '2026-04-02 20:30:00'),
+(92002, 80002, 50001, 40002, 90002, 10002, 'revision_required', 78.00, 'B', '第2页有两道题计算错误，请订正后重新提交。', '2026-04-02 20:40:00', '2026-04-02 20:40:00'),
 (92003, 80006, 50003, 40006, 90004, 10004, 'completed', 88.00, 'B', '已补交，单词拼写基本正确。', '2026-04-02 09:00:00', '2026-04-02 09:00:00');
 
 INSERT INTO `homework_review_asset`
@@ -154,7 +154,7 @@ INSERT INTO `homework_review_asset`
 VALUES
 (93001, 92002, 'image', 'https://oss.example.com/review/20260402/92002-1.png', 1, '2026-04-02 20:40:10');
 
-INSERT INTO `notification_record`
+INSERT INTO `notification`
 (`id`, `biz_type`, `biz_id`, `receiver_user_id`, `receiver_role`, `notify_channel`, `notify_title`, `notify_content`, `send_status`, `sent_at`, `read_at`, `created_at`)
 VALUES
 (94001, 'homework_publish', 50001, 20001, 'student', 'in_app', '新作业通知', '数学口算练习已发布，请于2026-04-03 20:00前完成。', 'success', '2026-04-02 16:31:00', '2026-04-02 18:50:00', '2026-04-02 16:31:00'),

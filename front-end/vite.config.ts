@@ -12,6 +12,42 @@ export default defineConfig(({ mode }) => {
         '@': fileURLToPath(new URL('./src', import.meta.url))
       }
     },
+    build: {
+      chunkSizeWarningLimit: 900,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) {
+              return undefined
+            }
+
+            const normalizedId = id.replace(/\\/g, '/')
+
+            if (
+              normalizedId.includes('/element-plus/') ||
+              normalizedId.includes('/@element-plus/') ||
+              normalizedId.includes('/@popperjs/') ||
+              normalizedId.includes('/async-validator/') ||
+              normalizedId.includes('/dayjs/') ||
+              normalizedId.includes('/lodash-unified/')
+            ) {
+              return 'vendor-element-plus'
+            }
+
+            if (
+              normalizedId.includes('/vue/') ||
+              normalizedId.includes('/@vue/') ||
+              normalizedId.includes('/pinia/') ||
+              normalizedId.includes('/vue-router/')
+            ) {
+              return 'vendor-vue'
+            }
+
+            return 'vendor-misc'
+          }
+        }
+      }
+    },
     server: {
       proxy: {
         '/api': {

@@ -1,0 +1,20 @@
+﻿{
+  "name": "小学课后作业移动端",
+  "appid": "__UNI__PRIMARY_HOMEWORK_MOBILE",
+  "description": "学生端与家长端共用的 uni-app 前端工程",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "app-plus": {
+    "usingComponents": true
+  },
+  "h5": {
+    "title": "小学课后作业移动端",
+    "router": {
+      "base": "/"
+    }
+  },
+  "mp-weixin": {
+    "appid": ""
+  }
+}

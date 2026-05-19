@@ -18,10 +18,42 @@ export interface DashboardCard {
 }
 
 export interface TeachingClassRelation {
+  relationId?: number | string
   classId: number | string
   className: string
+  gradeId?: number | string
+  gradeName?: string
+  schoolId?: number | string
+  schoolName?: string
   subjectCode: string
   subjectName: string
+  studentCount?: number
+  isHeadTeacher?: boolean
+  status?: string
+}
+
+export interface TeacherClassBindingSubject {
+  subjectCode: string
+  subjectName?: string
+  teacherId?: number | string
+  teacherName?: string
+}
+
+export interface TeacherClassBindingCandidate {
+  classId: number | string
+  className: string
+  gradeId?: number | string
+  gradeName?: string
+  schoolId?: number | string
+  schoolName?: string
+  studentCount?: number
+  status?: string
+  subjectBindings?: TeacherClassBindingSubject[]
+}
+
+export interface TeacherClassBindingPayload {
+  classId: number | string
+  subjectCode: string
   isHeadTeacher?: boolean
 }
 
@@ -35,6 +67,24 @@ export interface HomeworkAsset {
   assetUrl: string
   assetName?: string
   assetSize?: number
+}
+
+export type TeacherWrongReasonCode =
+  | 'calc_error'
+  | 'concept_error'
+  | 'reading_error'
+  | 'writing_error'
+  | 'careless_error'
+  | 'other'
+
+export interface TeacherWrongBookItemInput {
+  questionNo?: string
+  questionText?: string
+  studentAnswer?: string
+  correctAnswer?: string
+  analysisText?: string
+  wrongReasonCode?: TeacherWrongReasonCode | string
+  assets?: HomeworkAsset[]
 }
 
 export interface HomeworkListItem {
@@ -117,6 +167,7 @@ export interface HomeworkReview {
   commentText?: string
   reviewedAt?: string
   reviewAssets?: HomeworkAsset[]
+  wrongItems?: TeacherWrongBookItemInput[]
 }
 
 export interface HomeworkTaskDetail {
@@ -168,4 +219,55 @@ export interface HomeworkStatsQuery {
   subjectCode?: string
   startDate?: string
   endDate?: string
+}
+
+export type TeacherMessageBizType =
+  | 'custom_notice'
+  | 'homework_publish'
+  | 'deadline_reminder'
+  | 'submission_reminder'
+  | 'review_result'
+
+export type TeacherMessageScopeType = 'class' | 'homework'
+export type TeacherMessageReceiverRole = 'student' | 'parent' | 'both'
+export type TeacherMessageChannel = 'in_app' | 'wechat' | 'sms'
+export type TeacherMessageSendStatus = 'pending' | 'success' | 'failed'
+
+export interface TeacherMessageFormInput {
+  bizType: TeacherMessageBizType
+  scopeType: TeacherMessageScopeType
+  homeworkId?: number | string
+  classIds: Array<number | string>
+  receiverRole: TeacherMessageReceiverRole
+  notifyChannels: TeacherMessageChannel[]
+  notifyTitle: string
+  notifyContent: string
+}
+
+export interface TeacherMessageRecord {
+  messageId: number | string
+  bizType: TeacherMessageBizType | string
+  scopeType: TeacherMessageScopeType | string
+  notifyTitle: string
+  notifyContent: string
+  receiverRole: TeacherMessageReceiverRole | string
+  notifyChannels: TeacherMessageChannel[]
+  classIds?: Array<number | string>
+  classNames?: string[]
+  homeworkId?: number | string
+  homeworkTitle?: string
+  receiverCount?: number
+  successCount?: number
+  failedCount?: number
+  sendStatus: TeacherMessageSendStatus | string
+  sentAt?: string
+  createdAt?: string
+}
+
+export interface TeacherMessageQuery {
+  keyword?: string
+  bizType?: string
+  sendStatus?: string
+  pageNo?: number
+  pageSize?: number
 }

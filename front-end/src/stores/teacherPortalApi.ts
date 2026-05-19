@@ -1,33 +1,46 @@
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
+  createTeacherClassBinding,
   createTeacherHomework,
+  deleteTeacherHomework,
+  deleteTeacherMessage,
+  fetchTeacherBindingCandidates,
   fetchTeacherHomeworkDetail,
   fetchTeacherHomeworkOverview,
+  fetchTeacherMessageRecords,
   fetchTeacherHomeworks,
   fetchTeacherHomeworkTasks,
   fetchTeacherTaskDetail,
   fetchTeachingClasses,
   remindTeacherHomework,
   revokeTeacherHomework,
+  sendTeacherMessage,
   submitTeacherTaskReview,
   updateTeacherHomework
 } from '@/api/teacher'
-import { clearAuthSession, getAuthSession, persistAuthSession, roleMeta } from '@/utils/auth-session'
-import { buildDashboardCards } from '@/utils/teacher-portal'
+import { clearAuthSession, getAuthSession, persistAuthSession, roleMeta } from '@/utils/auth-session-clean'
+import { buildDashboardCards } from '@/utils/teacher-portal-view'
 import type { AuthSession } from '@/types/auth'
 import type {
   AssignmentFormInput,
   DashboardCard,
+  HomeworkAsset,
   HomeworkDetail,
   HomeworkListItem,
   HomeworkListQuery,
   HomeworkOverviewStats,
+  TeacherWrongBookItemInput,
+  TeacherMessageFormInput,
+  TeacherMessageQuery,
+  TeacherMessageRecord,
   HomeworkStatsQuery,
   HomeworkTaskDetail,
   HomeworkTaskListItem,
   HomeworkTaskQuery,
   SubjectOption,
+  TeacherClassBindingCandidate,
+  TeacherClassBindingPayload,
   TeacherProfile,
   TeachingClassRelation
 } from '@/types/teacher-portal'
@@ -43,18 +56,22 @@ const emptyOverview: HomeworkOverviewStats = {
 export const useTeacherPortalStore = defineStore('teacher-portal-api', () => {
   const authUser = ref<AuthSession | null>(getAuthSession())
   const classRelations = ref<TeachingClassRelation[]>([])
+  const bindingCandidates = ref<TeacherClassBindingCandidate[]>([])
   const homeworks = ref<HomeworkListItem[]>([])
+  const messageRecords = ref<TeacherMessageRecord[]>([])
   const homeworkOverview = ref<HomeworkOverviewStats>({ ...emptyOverview })
   const homeworkDetails = ref<Record<string, HomeworkDetail>>({})
   const homeworkTasks = ref<Record<string, HomeworkTaskListItem[]>>({})
   const taskDetails = ref<Record<string, HomeworkTaskDetail>>({})
   const loading = reactive({
     classes: false,
+    bindingCandidates: false,
     homeworks: false,
     overview: false,
     detail: false,
     tasks: false,
     taskDetail: false,
+    messages: false,
     action: false
   })
 
@@ -153,6 +170,17 @@ export const useTeacherPortalStore = defineStore('teacher-portal-api', () => {
     }
   }
 
+  async function loadBindingCandidates(keyword?: string) {
+    loading.bindingCandidates = true
+
+    try {
+      bindingCandidates.value = await fetchTeacherBindingCandidates(keyword)
+      return bindingCandidates.value
+    } finally {
+      loading.bindingCandidates = false
+    }
+  }
+
   async function loadHomeworkList(query: HomeworkListQuery = {}) {
     loading.homeworks = true
 
@@ -173,6 +201,18 @@ export const useTeacherPortalStore = defineStore('teacher-portal-api', () => {
       return homeworkOverview.value
     } finally {
       loading.overview = false
+    }
+  }
+
+  async function loadMessageRecords(query: TeacherMessageQuery = {}) {
+    loading.messages = true
+
+    try {
+      const data = await fetchTeacherMessageRecords(query)
+      messageRecords.value = data.list
+      return data.list
+    } finally {
+      loading.messages = false
     }
   }
 
@@ -245,13 +285,37 @@ export const useTeacherPortalStore = defineStore('teacher-portal-api', () => {
     }
   }
 
-  async function sendReminder(homeworkId: number | string, classId?: number | string) {
+  async function deleteAssignment(homeworkId: number | string) {
     loading.action = true
 
     try {
-      await remindTeacherHomework(homeworkId, {
-        classId
-      })
+      await deleteTeacherHomework(homeworkId)
+      delete homeworkDetails.value[`${homeworkId}`]
+      delete homeworkTasks.value[`${homeworkId}`]
+      homeworks.value = homeworks.value.filter((item) => `${item.homeworkId}` !== `${homeworkId}`)
+      await Promise.all([loadHomeworkList(), loadHomeworkOverview()])
+    } finally {
+      loading.action = false
+    }
+  }
+
+  async function sendReminder(homeworkId: number | string, classId?: number | string) {
+    return sendTypedReminder(homeworkId, {
+      classId
+    })
+  }
+
+  async function sendTypedReminder(
+    homeworkId: number | string,
+    payload: {
+      remindType?: 'pending' | 'overdue'
+      classId?: number | string
+    } = {}
+  ) {
+    loading.action = true
+
+    try {
+      await remindTeacherHomework(homeworkId, payload)
       await loadHomeworkTasks(homeworkId)
       await Promise.allSettled([loadHomeworkList(), loadHomeworkDetail(homeworkId)])
     } finally {
@@ -267,6 +331,8 @@ export const useTeacherPortalStore = defineStore('teacher-portal-api', () => {
       score?: number
       scoreLevel?: string
       commentText?: string
+      reviewAssets?: HomeworkAsset[]
+      wrongItems?: TeacherWrongBookItemInput[]
     }
   ) {
     loading.action = true
@@ -274,6 +340,40 @@ export const useTeacherPortalStore = defineStore('teacher-portal-api', () => {
     try {
       await submitTeacherTaskReview(taskId, payload)
       await loadTaskDetail(taskId)
+    } finally {
+      loading.action = false
+    }
+  }
+
+  async function saveClassBinding(payload: TeacherClassBindingPayload) {
+    loading.action = true
+
+    try {
+      await createTeacherClassBinding(payload)
+      await Promise.all([loadTeachingClasses(), loadBindingCandidates()])
+    } finally {
+      loading.action = false
+    }
+  }
+
+  async function sendMessage(payload: TeacherMessageFormInput) {
+    loading.action = true
+
+    try {
+      const result = await sendTeacherMessage(payload)
+      await loadMessageRecords()
+      return result
+    } finally {
+      loading.action = false
+    }
+  }
+
+  async function deleteMessage(messageId: number | string) {
+    loading.action = true
+
+    try {
+      await deleteTeacherMessage(messageId)
+      messageRecords.value = messageRecords.value.filter((item) => `${item.messageId}` !== `${messageId}`)
     } finally {
       loading.action = false
     }
@@ -306,7 +406,9 @@ export const useTeacherPortalStore = defineStore('teacher-portal-api', () => {
   return {
     authUser,
     classRelations,
+    bindingCandidates,
     homeworks,
+    messageRecords,
     homeworkOverview,
     loading,
     isAuthenticated,
@@ -320,15 +422,22 @@ export const useTeacherPortalStore = defineStore('teacher-portal-api', () => {
     setAuthenticatedUser,
     initializeWorkspace,
     loadTeachingClasses,
+    loadBindingCandidates,
     loadHomeworkList,
     loadHomeworkOverview,
+    loadMessageRecords,
     loadHomeworkDetail,
     loadHomeworkTasks,
     loadTaskDetail,
     saveAssignment,
     revokeAssignment,
+    deleteAssignment,
     sendReminder,
     submitReview,
+    sendTypedReminder,
+    sendMessage,
+    deleteMessage,
+    saveClassBinding,
     getHomeworkDetail,
     getHomeworkTasks,
     getTaskDetail

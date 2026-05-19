@@ -26,19 +26,28 @@ defineProps<{
   gap: 0.8rem;
   min-height: 220px;
   padding: 1.8rem;
-  border-radius: 999px;
+  border-radius: 32px;
   color: white;
   text-align: center;
   text-decoration: none;
-  box-shadow: 0 28px 45px rgba(14, 70, 120, 0.24);
-  transition:
-    transform 0.24s ease,
-    box-shadow 0.24s ease;
+  box-shadow: 0 16px 32px -8px rgba(15, 23, 42, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.quick-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 32px;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  pointer-events: none;
 }
 
 .quick-card:hover {
-  transform: translateY(-6px) scale(1.01);
-  box-shadow: 0 36px 55px rgba(14, 70, 120, 0.3);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.4);
 }
 
 .quick-icon {
@@ -65,14 +74,14 @@ defineProps<{
 }
 
 .quick-sky {
-  background: radial-gradient(circle at top, #71d1ff, #2b7cff 58%, #1d4ed8);
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
 }
 
 .quick-teal {
-  background: radial-gradient(circle at top, #7de8df, #1d9b8b 58%, #0f766e);
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
 }
 
 .quick-ink {
-  background: radial-gradient(circle at top, #7aa3ff, #2d5fab 58%, #14345b);
+  background: linear-gradient(135deg, #334155, #0f172a);
 }
 </style>

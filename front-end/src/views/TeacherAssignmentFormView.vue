@@ -1,396 +1,469 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
+import { Delete, Paperclip, UploadFilled } from '@element-plus/icons-vue'
+import { uploadTeacherFile } from '@/api/teacher'
 import { useTeacherPortalStore } from '@/stores/teacherPortalApi'
-import { submissionMethodOptions, toAssignmentForm } from '@/utils/teacher-portal'
-import type { AssignmentFormInput, HomeworkAsset } from '@/types/teacher-portal'
+import { formatAssetType } from '@/utils/format-labels'
+import type { HomeworkAsset, SubmissionMethod } from '@/types/teacher-portal'
 
-const route = useRoute()
 const router = useRouter()
+const route = useRoute()
 const store = useTeacherPortalStore()
 
-const formRef = ref<FormInstance>()
-const attachmentDraft = reactive({
-  assetName: '',
-  assetUrl: '',
-  assetType: 'file'
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const uploadingAttachments = ref(false)
+
+const isEdit = ref(false)
+const editHomeworkId = ref<string | number | undefined>(undefined)
+
+const formData = ref({
+  title: '',
+  subjectCode: '',
+  classIds: [] as Array<string | number>,
+  contentText: '',
+  deadlineAt: '',
+  allowLateSubmit: false,
+  needParentConfirm: false,
+  submitTypes: ['text', 'image'] as SubmissionMethod[],
+  allowResubmit: true,
+  attachments: [] as HomeworkAsset[]
 })
 
-const editId = computed(() => {
-  const value = route.query.edit
-  return typeof value === 'string' ? value : ''
-})
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
 
-const isEdit = computed(() => Boolean(editId.value))
+function parseDeadlineDate(value: string) {
+  if (!value) return null
+  const date = new Date(value.replace(/-/g, '/'))
+  return Number.isNaN(date.getTime()) ? null : date
+}
 
-const form = reactive<AssignmentFormInput>(toAssignmentForm())
+function disabledPastDate(date: Date) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return date.getTime() < today.getTime()
+}
 
-const availableClasses = computed(() =>
-  form.subjectCode
-    ? store.classRelations.filter((item) => item.subjectCode === form.subjectCode)
+function shouldLimitTodayTime() {
+  const selected = parseDeadlineDate(formData.value.deadlineAt)
+  return !selected || isSameDay(selected, new Date())
+}
+
+function disabledPastHours() {
+  if (!shouldLimitTodayTime()) return []
+  const currentHour = new Date().getHours()
+  return Array.from({ length: currentHour }, (_, index) => index)
+}
+
+function disabledPastMinutes(hour: number) {
+  if (!shouldLimitTodayTime()) return []
+  const now = new Date()
+  return hour === now.getHours() ? Array.from({ length: now.getMinutes() }, (_, index) => index) : []
+}
+
+function disabledPastSeconds(hour: number, minute: number) {
+  if (!shouldLimitTodayTime()) return []
+  const now = new Date()
+  return hour === now.getHours() && minute === now.getMinutes()
+    ? Array.from({ length: now.getSeconds() + 1 }, (_, index) => index)
     : []
-)
-
-const selectedClasses = computed(() => {
-  const selectedSet = new Set(form.classIds.map((item) => `${item}`))
-  return store.classRelations.filter((item) => selectedSet.has(`${item.classId}`))
-})
-
-const rules: FormRules = {
-  title: [{ required: true, message: '请输入作业标题', trigger: 'blur' }],
-  subjectCode: [{ required: true, message: '请选择学科', trigger: 'change' }],
-  classIds: [
-    {
-      validator: (_, value, callback) => {
-        if (Array.isArray(value) && value.length > 0) {
-          callback()
-          return
-        }
-
-        callback(new Error('请至少选择一个班级'))
-      },
-      trigger: 'change'
-    }
-  ],
-  deadlineAt: [
-    { required: true, message: '请选择截止时间', trigger: 'change' },
-    {
-      validator: (_, value, callback) => {
-        if (!value) {
-          callback()
-          return
-        }
-
-        if (new Date(value).getTime() <= Date.now()) {
-          callback(new Error('截止时间必须晚于当前时间'))
-          return
-        }
-
-        callback()
-      },
-      trigger: 'change'
-    }
-  ],
-  contentText: [{ required: true, message: '请输入作业内容', trigger: 'blur' }],
-  submitTypes: [
-    {
-      validator: (_, value, callback) => {
-        if (Array.isArray(value) && value.length > 0) {
-          callback()
-          return
-        }
-
-        callback(new Error('请至少选择一种提交方式'))
-      },
-      trigger: 'change'
-    }
-  ]
 }
 
-function applyForm(next: AssignmentFormInput) {
-  form.title = next.title
-  form.subjectCode = next.subjectCode
-  form.classIds = [...next.classIds]
-  form.deadlineAt = next.deadlineAt
-  form.contentText = next.contentText
-  form.submitTypes = [...next.submitTypes]
-  form.allowLateSubmit = next.allowLateSubmit
-  form.allowResubmit = next.allowResubmit
-  form.needParentConfirm = next.needParentConfirm
-  form.attachments = [...next.attachments]
+function detectAssetType(file: File): HomeworkAsset['assetType'] {
+  if (file.type.startsWith('image/')) return 'image'
+  if (file.type.startsWith('audio/')) return 'audio'
+  if (file.type.startsWith('video/')) return 'video'
+  return 'file'
 }
 
-function isClassSelected(classId: number | string) {
-  return form.classIds.some((item) => `${item}` === `${classId}`)
-}
-
-function toggleClass(classId: number | string) {
-  if (isClassSelected(classId)) {
-    form.classIds = form.classIds.filter((item) => `${item}` !== `${classId}`)
-    return
-  }
-
-  form.classIds = [...form.classIds, classId]
-}
-
-function selectAllVisibleClasses() {
-  const merged = new Set(form.classIds.map((item) => `${item}`))
-
-  availableClasses.value.forEach((item) => {
-    merged.add(`${item.classId}`)
-  })
-
-  form.classIds = availableClasses.value
-    .map((item) => item.classId)
-    .filter((item) => merged.has(`${item}`))
-}
-
-function clearSelectedClasses() {
-  form.classIds = []
-}
-
-function removeClass(classId: number | string) {
-  form.classIds = form.classIds.filter((item) => `${item}` !== `${classId}`)
-}
-
-function addAttachment() {
-  const assetUrl = attachmentDraft.assetUrl.trim()
-
-  if (!assetUrl) {
-    ElMessage.warning('请先填写附件地址')
-    return
-  }
-
-  const asset: HomeworkAsset = {
-    assetType: attachmentDraft.assetType,
-    assetUrl,
-    assetName: attachmentDraft.assetName.trim() || assetUrl
-  }
-
-  form.attachments = [...form.attachments, asset]
-  attachmentDraft.assetName = ''
-  attachmentDraft.assetUrl = ''
-  attachmentDraft.assetType = 'file'
+function triggerAttachmentSelect() {
+  fileInputRef.value?.click()
 }
 
 function removeAttachment(index: number) {
-  form.attachments.splice(index, 1)
+  formData.value.attachments.splice(index, 1)
 }
 
-async function loadForm() {
+async function handleAttachmentChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  const files = Array.from(target.files ?? [])
+
+  if (!files.length) {
+    return
+  }
+
+  uploadingAttachments.value = true
   try {
-    await store.loadTeachingClasses()
-
-    if (editId.value) {
-      const detail = await store.loadHomeworkDetail(editId.value)
-      applyForm(toAssignmentForm(detail))
-      return
+    for (const file of files) {
+      const uploaded = await uploadTeacherFile(file, 'teacher-homework-attachment')
+      formData.value.attachments.push({
+        assetType: detectAssetType(file),
+        assetUrl: uploaded.fileUrl,
+        assetName: uploaded.fileName || file.name,
+        assetSize: uploaded.fileSize || file.size
+      })
     }
-
-    applyForm(toAssignmentForm())
+    ElMessage.success('附件上传成功')
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '作业表单加载失败')
+    ElMessage.error(error instanceof Error ? error.message : '附件上传失败，请稍后重试。')
+  } finally {
+    uploadingAttachments.value = false
+    target.value = ''
   }
 }
 
-async function submit(nextState: 'draft' | 'published') {
-  const valid = await formRef.value?.validate().catch(() => false)
+onMounted(async () => {
+  if (!store.classOptions.length) {
+    await store.loadTeachingClasses()
+  }
 
-  if (!valid) {
+  if (route.query.edit) {
+    isEdit.value = true
+    editHomeworkId.value = route.query.edit as string
+
+    try {
+      const detail = await store.loadHomeworkDetail(editHomeworkId.value)
+      if (detail) {
+        formData.value.title = detail.baseInfo.title
+        formData.value.subjectCode = detail.baseInfo.subjectCode
+        formData.value.classIds = detail.classList.map((item) => item.classId)
+        formData.value.contentText = detail.baseInfo.contentText || ''
+        formData.value.deadlineAt = detail.baseInfo.deadlineAt || ''
+        formData.value.allowLateSubmit = detail.baseInfo.allowLateSubmit || false
+        formData.value.needParentConfirm = detail.baseInfo.needParentConfirm || false
+        formData.value.submitTypes = detail.baseInfo.submitTypes || ['text', 'image']
+        formData.value.allowResubmit = detail.baseInfo.allowResubmit !== false
+        formData.value.attachments = detail.attachments || []
+      }
+    } catch {
+      ElMessage.error('无法加载作业数据进行编辑')
+      router.back()
+    }
+  }
+})
+
+async function submit(publishNow: boolean) {
+  if (!formData.value.title || !formData.value.subjectCode || !formData.value.classIds.length) {
+    ElMessage.warning('请填写完整的必要信息')
+    return
+  }
+
+  const deadline = parseDeadlineDate(formData.value.deadlineAt)
+  if (deadline && deadline.getTime() <= Date.now()) {
+    ElMessage.warning('截止时间不能早于当前时间')
     return
   }
 
   try {
-    const homeworkId = await store.saveAssignment(form, nextState, editId.value || undefined)
-    ElMessage.success(nextState === 'published' ? '作业已发布' : '草稿已保存')
-    await router.push(`/assignments/${homeworkId}`)
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '作业保存失败')
-  }
-}
-
-watch(
-  () => form.subjectCode,
-  (subjectCode) => {
-    if (!subjectCode) {
-      form.classIds = []
-      return
-    }
-
-    const allowedIds = new Set(
-      store.classRelations
-        .filter((item) => item.subjectCode === subjectCode)
-        .map((item) => `${item.classId}`)
+    const action = publishNow ? 'published' : 'draft'
+    await store.saveAssignment(
+      {
+        title: formData.value.title,
+        subjectCode: formData.value.subjectCode,
+        classIds: formData.value.classIds,
+        contentText: formData.value.contentText,
+        deadlineAt: formData.value.deadlineAt,
+        allowLateSubmit: formData.value.allowLateSubmit,
+        needParentConfirm: formData.value.needParentConfirm,
+        submitTypes: formData.value.submitTypes,
+        allowResubmit: formData.value.allowResubmit,
+        attachments: formData.value.attachments
+      },
+      action,
+      editHomeworkId.value
     )
 
-    form.classIds = form.classIds.filter((item) => allowedIds.has(`${item}`))
+    ElMessage.success(publishNow ? '作业已成功发布' : '草稿已保存')
+    router.push('/assignments')
+  } catch (error) {
+    ElMessage.error((error as Error).message || '保存失败')
   }
-)
-
-watch(editId, () => {
-  void loadForm()
-})
-
-onMounted(loadForm)
+}
 </script>
 
 <template>
-  <section class="page-stack">
-    <header class="page-header">
+  <div class="page-stack">
+    <header class="page-header header-glow mb-4">
       <div>
-        <h2>{{ isEdit ? '编辑作业' : '发布作业' }}</h2>
-        <p>已切换为正式接口表单，发布时可同时选择多个班级，并直接提交 `classIds`。</p>
+        <h2 class="hero-title">{{ isEdit ? '编辑作业' : '发布新作业' }}</h2>
+        <p class="subtitle mt-2">填写以下信息为班级派发任务，支持多班级发布与附件上传。</p>
       </div>
+      <el-button @click="router.back()">返回上一步</el-button>
     </header>
 
-    <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="page-stack">
-      <section class="split-grid">
-        <article class="section-card surface-card">
-          <h3>基础信息</h3>
-          <p class="section-subtitle">先确定标题、学科和截止时间，再批量选择目标班级。</p>
-
-          <el-form-item label="作业标题" prop="title">
-            <el-input
-              v-model="form.title"
-              maxlength="60"
-              show-word-limit
-              placeholder="例如：三年级数学口算练习"
-            />
-          </el-form-item>
-
-          <div class="split-grid">
-            <el-form-item label="所属学科" prop="subjectCode">
-              <el-select v-model="form.subjectCode" placeholder="请选择学科">
+    <div class="surface-card section-card">
+      <el-form class="custom-form mt-2" label-position="top" @submit.prevent>
+        <el-row :gutter="32">
+          <el-col :span="12">
+            <el-form-item label="作业标题" required>
+              <el-input v-model="formData.title" size="large" placeholder="如：第三单元词语抄写与背诵" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="所属学科" required>
+              <el-select v-model="formData.subjectCode" class="w-full" size="large" placeholder="请选择学科">
                 <el-option
-                  v-for="item in store.subjectOptions"
-                  :key="item.subjectCode"
-                  :label="item.subjectName"
-                  :value="item.subjectCode"
+                  v-for="subject in store.subjectOptions"
+                  :key="subject.subjectCode"
+                  :label="subject.subjectName"
+                  :value="subject.subjectCode"
                 />
               </el-select>
             </el-form-item>
+          </el-col>
 
-            <el-form-item label="截止时间" prop="deadlineAt">
-              <el-date-picker
-                v-model="form.deadlineAt"
-                type="datetime"
-                value-format="YYYY-MM-DD HH:mm:ss"
-                placeholder="请选择截止时间"
-                style="width: 100%;"
+          <el-col :span="24">
+            <el-form-item label="下发至教学班级（支持多选组合发布）" required>
+              <el-select
+                v-model="formData.classIds"
+                class="w-full deadline-picker"
+                size="large"
+                multiple
+                placeholder="请在此处选择一个或多个班级"
+              >
+                <el-option
+                  v-for="item in store.classOptions"
+                  :key="item.classId"
+                  :label="item.className"
+                  :value="item.classId"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="24">
+            <el-form-item label="作业要求详述" required>
+              <el-input
+                v-model="formData.contentText"
+                type="textarea"
+                :rows="6"
+                resize="none"
+                placeholder="详细输入您的作业说明，也支持复制文本。"
               />
             </el-form-item>
-          </div>
+          </el-col>
+        </el-row>
 
-          <el-form-item label="发布班级" prop="classIds">
-            <div class="class-selector-shell">
-              <div class="card-row-between">
-                <p class="section-subtitle" style="margin: 0;">
-                  {{ form.subjectCode ? '点击卡片可快速多选班级。' : '请先选择学科，再加载可发布班级。' }}
-                </p>
-                <div class="actions-row" style="margin-top: 0;">
-                  <el-button text :disabled="!availableClasses.length" @click="selectAllVisibleClasses">全选本学科</el-button>
-                  <el-button text :disabled="!form.classIds.length" @click="clearSelectedClasses">清空</el-button>
-                </div>
+        <el-divider class="my-4" border-style="dashed" />
+
+        <el-row :gutter="32">
+          <el-col :span="12">
+            <el-form-item label="截止时间">
+              <el-date-picker
+                v-model="formData.deadlineAt"
+                class="w-full"
+                size="large"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                format="YYYY年MM月DD日 HH:mm"
+                :disabled-date="disabledPastDate"
+                :disabled-hours="disabledPastHours"
+                :disabled-minutes="disabledPastMinutes"
+                :disabled-seconds="disabledPastSeconds"
+                popper-class="homework-deadline-popper"
+                placeholder="设定最晚提交时间"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="其他策略配置">
+              <div class="checkbox-group glass-panel">
+                <el-checkbox v-model="formData.allowLateSubmit">允许逾期补交</el-checkbox>
+                <el-checkbox v-model="formData.needParentConfirm">需要家长协助确认</el-checkbox>
               </div>
+            </el-form-item>
+          </el-col>
+        </el-row>
 
-              <div v-if="availableClasses.length" class="class-selector-grid">
-                <button
-                  v-for="item in availableClasses"
-                  :key="item.classId"
-                  type="button"
-                  class="class-selector-card"
-                  :class="{ 'class-selector-card-active': isClassSelected(item.classId) }"
-                  @click="toggleClass(item.classId)"
-                >
-                  <span class="class-selector-mark">{{ item.className.slice(0, 1) }}</span>
-                  <strong>{{ item.className }}</strong>
-                  <small>{{ item.isHeadTeacher ? '班主任班级' : '任课班级' }}</small>
-                </button>
-              </div>
-              <div v-else class="empty-state">当前学科下暂无可发布班级。</div>
-            </div>
-          </el-form-item>
-
-          <div class="chip-row" v-if="selectedClasses.length">
-            <span v-for="item in selectedClasses" :key="item.classId" class="soft-chip">
-              {{ item.className }}
-              <button type="button" class="chip-close-button" @click="removeClass(item.classId)">×</button>
-            </span>
-          </div>
-        </article>
-
-        <article class="section-card surface-card">
-          <h3>发布规则</h3>
-          <p class="section-subtitle">提交方式和作业规则都会按真实接口字段提交给后端。</p>
-
-          <el-form-item label="提交方式" prop="submitTypes">
-            <el-checkbox-group v-model="form.submitTypes">
-              <el-checkbox
-                v-for="option in submissionMethodOptions"
-                :key="option.value"
-                :label="option.value"
+        <el-form-item label="作业附件">
+          <div class="attachment-panel">
+            <div class="attachment-toolbar">
+              <el-button
+                type="primary"
+                plain
+                :icon="UploadFilled"
+                :loading="uploadingAttachments"
+                @click="triggerAttachmentSelect"
               >
-                {{ option.label }}
-              </el-checkbox>
-            </el-checkbox-group>
-          </el-form-item>
+                上传附件
+              </el-button>
+              <span class="attachment-hint">支持上传图片、文档、音频或视频，用于补充题单、参考资料和示例。</span>
+            </div>
 
-          <div class="form-stack">
-            <el-switch v-model="form.allowLateSubmit" active-text="允许逾期提交" inactive-text="截止后不可提交" />
-            <el-switch v-model="form.allowResubmit" active-text="允许重复提交" inactive-text="只允许提交一次" />
-            <el-switch v-model="form.needParentConfirm" active-text="需要家长确认" inactive-text="无需家长确认" />
-          </div>
-        </article>
-      </section>
-
-      <section class="split-grid">
-        <article class="section-card surface-card">
-          <h3>作业内容</h3>
-          <p class="section-subtitle">填写作业要求，并准备和后端对接的附件结构。</p>
-
-          <el-form-item label="作业内容" prop="contentText">
-            <el-input
-              v-model="form.contentText"
-              type="textarea"
-              :rows="10"
-              placeholder="请输入作业说明、提交要求、评分重点等内容"
+            <input
+              ref="fileInputRef"
+              class="hidden-input"
+              type="file"
+              multiple
+              @change="handleAttachmentChange"
             />
-          </el-form-item>
 
-          <div class="attachment-editor">
-            <div class="attachment-editor-grid">
-              <el-input v-model="attachmentDraft.assetName" placeholder="附件名称，例如：练习册.pdf" />
-              <el-select v-model="attachmentDraft.assetType" placeholder="类型">
-                <el-option label="文件" value="file" />
-                <el-option label="图片" value="image" />
-                <el-option label="音频" value="audio" />
-                <el-option label="视频" value="video" />
-              </el-select>
-            </div>
-            <div class="attachment-editor-grid">
-              <el-input v-model="attachmentDraft.assetUrl" placeholder="附件地址或对象存储链接" />
-              <el-button @click="addAttachment">添加附件</el-button>
-            </div>
-          </div>
-
-          <div class="panel-list" v-if="form.attachments.length">
-            <div v-for="(item, index) in form.attachments" :key="`${item.assetUrl}-${index}`" class="panel-list-item">
-              <div class="card-row-between">
-                <div>
-                  <strong>{{ item.assetName || item.assetUrl }}</strong>
-                  <p>{{ item.assetType }} · {{ item.assetUrl }}</p>
+            <div v-if="formData.attachments.length" class="attachment-list">
+              <div v-for="(item, index) in formData.attachments" :key="`${item.assetUrl}-${index}`" class="attachment-item">
+                <div class="attachment-meta">
+                  <el-icon class="attachment-icon"><Paperclip /></el-icon>
+                  <div>
+                    <div class="attachment-name">{{ item.assetName || '未命名附件' }}</div>
+                    <div class="attachment-subtitle">{{ formatAssetType(item.assetType) }} · {{ item.assetUrl }}</div>
+                  </div>
                 </div>
-                <el-button text type="danger" @click="removeAttachment(index)">移除</el-button>
+                <el-button text type="danger" :icon="Delete" @click="removeAttachment(index)">移除</el-button>
               </div>
             </div>
+            <div v-else class="attachment-empty">当前还没有上传附件。</div>
           </div>
-          <div v-else class="empty-state">当前没有附件，可在后端上传接口完成后直接接入。</div>
-        </article>
+        </el-form-item>
 
-        <article class="section-card surface-card">
-          <h3>发布检查</h3>
-          <p class="section-subtitle">正式开发阶段，推荐在这里确认接口必填项是否齐全。</p>
-
-          <div class="insight-list">
-            <div class="insight-item">已选班级 {{ form.classIds.length }} 个，发布时将直接提交 `classIds` 数组。</div>
-            <div class="insight-item">学科代码使用后端返回的 `subjectCode`，避免前后端枚举不一致。</div>
-            <div class="insight-item">附件已改为对象结构，后续只需将上传结果映射为 `assetUrl/assetName/assetType`。</div>
-          </div>
-        </article>
-      </section>
-
-      <article class="section-card surface-card">
-        <h3>提交操作</h3>
-        <p class="section-subtitle">支持保存草稿和立即发布两种操作。</p>
-        <div class="actions-row">
-          <el-button size="large" :loading="store.loading.action" @click="submit('draft')">保存草稿</el-button>
-          <el-button type="primary" size="large" :loading="store.loading.action" @click="submit('published')">
-            {{ isEdit ? '保存并发布' : '发布作业' }}
+        <div class="form-actions mt-4">
+          <el-button size="large" type="primary" class="submit-btn custom-shadow" :loading="store.loading.action" @click="submit(true)">
+            {{ isEdit ? '保存并发布' : '确认并立即下发' }}
           </el-button>
+          <el-button size="large" :loading="store.loading.action" @click="submit(false)">保存为草稿</el-button>
         </div>
-      </article>
-    </el-form>
-  </section>
+      </el-form>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.mb-4 { margin-bottom: 24px; }
+.mt-2 { margin-top: 8px; }
+.mt-4 { margin-top: 24px; }
+.my-4 { margin: 24px 0; }
+.w-full { width: 100%; }
+
+.header-glow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.subtitle {
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.custom-form {
+  max-width: 980px;
+  padding: 10px;
+}
+
+:deep(.deadline-picker.el-date-editor.el-input) {
+  height: 54px;
+}
+
+:deep(.deadline-picker .el-input__wrapper) {
+  min-height: 54px;
+  border-radius: 16px;
+  border: 1px solid #d8e3f2;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 250, 255, 0.9)),
+    radial-gradient(circle at 12% 20%, rgba(64, 158, 255, 0.12), transparent 32%);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+:deep(.deadline-picker .el-input__wrapper:hover),
+:deep(.deadline-picker .el-input__wrapper.is-focus) {
+  border-color: #409eff;
+  box-shadow: 0 18px 42px rgba(64, 158, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.checkbox-group.glass-panel {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  min-height: 48px;
+  background: rgba(241, 245, 249, 0.5);
+  border-radius: 8px;
+  padding: 0 16px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.attachment-panel {
+  width: 100%;
+  padding: 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.attachment-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.attachment-hint {
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #dbe4f0;
+  background: white;
+}
+
+.attachment-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.attachment-icon {
+  font-size: 18px;
+  color: #409eff;
+}
+
+.attachment-name {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.attachment-subtitle {
+  color: #64748b;
+  font-size: 0.82rem;
+  word-break: break-all;
+}
+
+.attachment-empty {
+  color: #94a3b8;
+  font-size: 0.92rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.submit-btn {
+  padding: 0 32px;
+  font-weight: 600;
+}
+
+.custom-shadow {
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+}
+</style>

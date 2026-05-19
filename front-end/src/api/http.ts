@@ -2,7 +2,7 @@ import { clearAuthSession, getAuthSession } from '@/utils/auth-session'
 
 interface ApiResponse<T> {
   code: number
-  message: string
+  message?: string
   data: T
 }
 
@@ -35,11 +35,7 @@ function buildHeaders(headers?: HeadersInit, auth = true) {
 }
 
 function isWrappedResponse<T>(payload: unknown): payload is ApiResponse<T> {
-  if (!payload || typeof payload !== 'object') {
-    return false
-  }
-
-  return 'code' in payload && 'message' in payload && 'data' in payload
+  return Boolean(payload && typeof payload === 'object' && 'code' in payload && 'data' in payload)
 }
 
 export async function requestJson<T>(path: string, options: RequestOptions = {}) {
@@ -56,13 +52,13 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
     throw new Error('无法连接后端服务，请检查接口服务是否已启动。')
   }
 
-  let payload: any = null
+  let payload: unknown = null
 
   try {
     payload = await response.json()
   } catch {
     if (!response.ok) {
-      throw new Error(`接口请求失败（${response.status}）`)
+      throw new Error(`接口请求失败：${response.status}`)
     }
   }
 
@@ -71,16 +67,22 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
   }
 
   if (!response.ok) {
-    throw new Error(payload?.message || `接口请求失败（${response.status}）`)
+    throw new Error(
+      isWrappedResponse<T>(payload) && payload.message ? payload.message : `接口请求失败：${response.status}`
+    )
   }
 
   if (!payload) {
     throw new Error('接口未返回可用数据。')
   }
 
-  if (payload.code !== 0) {
-    throw new Error(payload.message || '接口请求未通过。')
+  if (isWrappedResponse<T>(payload)) {
+    if (payload.code !== 0) {
+      throw new Error(payload.message || '接口请求未通过。')
+    }
+
+    return payload.data
   }
 
-  return payload.data
+  return payload as T
 }

@@ -1,0 +1,12 @@
+.git
+.idea
+target
+.m2
+*.log
+manual-*.log
+manual-*.out.log
+manual-*.err.log
+spring-boot-*.log
+startup-*.log
+teacher-run*.log
+docs
