@@ -6,6 +6,11 @@ import type {
   StudentHomeworkSubmission,
   StudentMessageItem,
   StudentPageResult,
+  StudentWrongBookPracticeDetail,
+  StudentWrongBookPracticeHistoryRecord,
+  StudentWrongBookPracticePlan,
+  StudentWrongBookPracticeSubmitPayload,
+  StudentWrongBookPracticeSubmitResult,
   StudentSubjectOption,
   StudentSubmitPayload,
   StudentWrongBookCreatePayload,
@@ -122,6 +127,35 @@ export function markStudentWrongBookMastered(wrongBookId: string) {
     method: 'POST',
     body: JSON.stringify({})
   })
+}
+
+export function generateStudentWrongBookPracticePlan(subjectCode = 'all', questionCount = 10) {
+  return requestJson<StudentWrongBookPracticePlan>(
+    withQuery('/api/student/wrong-book/practice/plan', {
+      subjectCode: subjectCode === 'all' ? undefined : subjectCode,
+      questionCount
+    })
+  )
+}
+
+export function submitStudentWrongBookPractice(payload: StudentWrongBookPracticeSubmitPayload) {
+  return requestJson<StudentWrongBookPracticeSubmitResult>('/api/student/wrong-book/practice/submit', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export function fetchStudentWrongBookPracticeHistory(pageNo = 1, pageSize = 20) {
+  return requestJson<StudentPageResult<StudentWrongBookPracticeHistoryRecord>>(
+    withQuery('/api/student/wrong-book/practice/history', {
+      pageNo,
+      pageSize
+    })
+  )
+}
+
+export function fetchStudentWrongBookPracticeDetail(practiceId: string | number) {
+  return requestJson<StudentWrongBookPracticeDetail>(`/api/student/wrong-book/practice/${practiceId}`)
 }
 
 export async function uploadStudentFile(file: File, bizType: string) {

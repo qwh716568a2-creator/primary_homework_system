@@ -3,6 +3,7 @@ package com.primaryhomework.backend.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.primaryhomework.backend.entity.dto.WrongBookCreateDto;
 import com.primaryhomework.backend.entity.dto.WrongBookFixDto;
+import com.primaryhomework.backend.entity.dto.WrongBookPracticeSubmitDto;
 import com.primaryhomework.backend.entity.dto.WrongBookQueryDto;
 import com.primaryhomework.backend.entity.dto.mobile.SubmitDto;
 import com.primaryhomework.backend.entity.po.*;
@@ -223,6 +224,26 @@ public class StudentServiceImpl implements StudentService {
     @Override
     public void markWrongBookMastered(String authorization, Long wrongBookId) {
         wrongBookService.markStudentWrongBookMastered(authorization, wrongBookId);
+    }
+
+    @Override
+    public WrongBookPracticePlanVo generateWrongBookPracticePlan(String authorization, String subjectCode, Integer questionCount) {
+        return wrongBookService.generateStudentPracticePlan(authorization, subjectCode, questionCount);
+    }
+
+    @Override
+    public WrongBookPracticeSubmitResultVo submitWrongBookPractice(String authorization, WrongBookPracticeSubmitDto submitDto) {
+        return wrongBookService.submitStudentPractice(authorization, submitDto);
+    }
+
+    @Override
+    public PageDTO<WrongBookPracticeHistoryVo> listWrongBookPracticeHistory(String authorization, Integer pageNo, Integer pageSize) {
+        return wrongBookService.pageStudentPracticeHistory(authorization, pageNo, pageSize);
+    }
+
+    @Override
+    public WrongBookPracticeDetailVo getWrongBookPractice(String authorization, Long practiceId) {
+        return wrongBookService.getStudentPractice(authorization, practiceId);
     }
 
     private UserPo resolveStudentUser(String authorization) {

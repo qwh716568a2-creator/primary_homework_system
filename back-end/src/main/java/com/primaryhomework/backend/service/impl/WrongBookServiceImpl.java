@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.primaryhomework.backend.entity.dto.WrongBookAssetDto;
 import com.primaryhomework.backend.entity.dto.WrongBookCreateDto;
 import com.primaryhomework.backend.entity.dto.WrongBookFixDto;
+import com.primaryhomework.backend.entity.dto.WrongBookPracticeSubmitDto;
+import com.primaryhomework.backend.entity.dto.WrongBookPracticeSubmitItemDto;
 import com.primaryhomework.backend.entity.dto.WrongBookQueryDto;
 import com.primaryhomework.backend.entity.dto.WrongItemDto;
 import com.primaryhomework.backend.entity.po.HomeworkPo;
@@ -18,10 +20,17 @@ import com.primaryhomework.backend.entity.po.TeacherPo;
 import com.primaryhomework.backend.entity.po.UserPo;
 import com.primaryhomework.backend.entity.po.WrongBookAssetPo;
 import com.primaryhomework.backend.entity.po.WrongBookItemPo;
+import com.primaryhomework.backend.entity.po.WrongBookPracticeItemPo;
+import com.primaryhomework.backend.entity.po.WrongBookPracticePo;
 import com.primaryhomework.backend.entity.vo.PageDTO;
 import com.primaryhomework.backend.entity.vo.mobile.WrongBookAssetVo;
 import com.primaryhomework.backend.entity.vo.mobile.WrongBookDetailVo;
 import com.primaryhomework.backend.entity.vo.mobile.WrongBookListVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticeDetailVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticeHistoryVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticeItemVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticePlanVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticeSubmitResultVo;
 import com.primaryhomework.backend.entity.vo.mobile.WrongBookSaveVo;
 import com.primaryhomework.backend.entity.vo.teacher.HomeworkAssetVo;
 import com.primaryhomework.backend.entity.vo.teacher.ReviewWrongItemVo;
@@ -37,6 +46,8 @@ import com.primaryhomework.backend.mapper.TeacherMapper;
 import com.primaryhomework.backend.mapper.UserMapper;
 import com.primaryhomework.backend.mapper.WrongBookAssetMapper;
 import com.primaryhomework.backend.mapper.WrongBookItemMapper;
+import com.primaryhomework.backend.mapper.WrongBookPracticeItemMapper;
+import com.primaryhomework.backend.mapper.WrongBookPracticeMapper;
 import com.primaryhomework.backend.service.WrongBookService;
 import com.primaryhomework.backend.utils.CommonException;
 import com.primaryhomework.backend.utils.CurrentUserSupport;
@@ -46,11 +57,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -58,6 +71,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -66,6 +80,19 @@ import java.util.stream.Collectors;
 public class WrongBookServiceImpl implements WrongBookService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final String STATUS_PENDING_FIX = "pending_fix";
+    private static final String STATUS_FIXED = "fixed";
+    private static final String STATUS_MASTERED = "mastered";
+    private static final String POOL_ACTIVE_WRONG = "active_wrong";
+    private static final String POOL_RISKY_CORRECT = "risky_correct";
+    private static final String POOL_MASTERED_ARCHIVE = "mastered_archive";
+    private static final String RESULT_CORRECT = "correct";
+    private static final String RESULT_WRONG = "wrong";
+    private static final String RESULT_UNANSWERED = "unanswered";
+    private static final BigDecimal DEFAULT_MASTERY_SCORE = new BigDecimal("100.00");
+    private static final BigDecimal SCORE_CORRECT_DELTA = new BigDecimal("20.00");
+    private static final BigDecimal SCORE_WRONG_DELTA = new BigDecimal("25.00");
+    private static final BigDecimal MIN_RANDOM_WEIGHT = new BigDecimal("0.01");
     private static final Map<String, String> WRONG_REASON_LABEL_MAP = Map.ofEntries(
             Map.entry("calc_error", "计算错误"),
             Map.entry("concept_error", "概念不清"),
@@ -98,6 +125,8 @@ public class WrongBookServiceImpl implements WrongBookService {
     private final HomeworkReviewMapper homeworkReviewMapper;
     private final WrongBookItemMapper wrongBookItemMapper;
     private final WrongBookAssetMapper wrongBookAssetMapper;
+    private final WrongBookPracticeMapper wrongBookPracticeMapper;
+    private final WrongBookPracticeItemMapper wrongBookPracticeItemMapper;
 
     @Override
     @Transactional
@@ -154,6 +183,7 @@ public class WrongBookServiceImpl implements WrongBookService {
             itemPo.setAddedByRole("teacher");
             itemPo.setRecognizedConfidence(null);
             itemPo.setFixCount(0);
+            initPracticeState(itemPo, "teacher_mark");
             wrongBookItemMapper.insert(itemPo);
             saveAssets(itemPo.getId(), wrongItem.getAssets(), "question_image");
             insertedCount++;
@@ -279,6 +309,7 @@ public class WrongBookServiceImpl implements WrongBookService {
         itemPo.setAddedByUserId(studentUser.getId());
         itemPo.setAddedByRole("student");
         itemPo.setFixCount(0);
+        initPracticeState(itemPo, "student_manual");
         wrongBookItemMapper.insert(itemPo);
         saveAssets(itemPo.getId(), createDto.getAssets(), "question_image");
 
@@ -300,7 +331,8 @@ public class WrongBookServiceImpl implements WrongBookService {
         itemPo.setLastFixedText(trimToNull(fixDto.getFixedText()));
         itemPo.setLastFixedAt(LocalDateTime.now());
         itemPo.setFixCount(defaultInteger(itemPo.getFixCount(), 0) + 1);
-        itemPo.setStatus("fixed");
+        itemPo.setStatus(STATUS_FIXED);
+        itemPo.setPoolType(defaultString(itemPo.getPoolType(), POOL_ACTIVE_WRONG));
         wrongBookItemMapper.updateById(itemPo);
         saveAssets(itemPo.getId(), fixDto.getAssets(), "correction_image");
     }
@@ -311,7 +343,8 @@ public class WrongBookServiceImpl implements WrongBookService {
         UserPo studentUser = resolveStudentUser(authorization);
         StudentPo student = requireStudent(studentUser.getId());
         WrongBookItemPo itemPo = requireWrongBookForStudent(student.getId(), wrongBookId);
-        itemPo.setStatus("mastered");
+        itemPo.setStatus(STATUS_MASTERED);
+        itemPo.setPoolType(POOL_MASTERED_ARCHIVE);
         wrongBookItemMapper.updateById(itemPo);
     }
 
@@ -320,6 +353,210 @@ public class WrongBookServiceImpl implements WrongBookService {
         UserPo parentUser = resolveParentUser(authorization);
         StudentPo student = requireBoundStudent(parentUser.getId(), studentId);
         return pageWrongBooks(student.getId(), queryDto);
+    }
+
+    @Override
+    @Transactional
+    public WrongBookPracticePlanVo generateStudentPracticePlan(String authorization, String subjectCode, Integer questionCount) {
+        UserPo studentUser = resolveStudentUser(authorization);
+        StudentPo student = requireStudent(studentUser.getId());
+        String normalizedSubjectCode = canonicalSubjectCode(subjectCode);
+        int safeQuestionCount = normalizeQuestionCount(questionCount);
+
+        List<WrongBookItemPo> activePool = loadActivePracticePool(student.getId(), normalizedSubjectCode);
+        List<WrongBookItemPo> riskyPool = loadRiskyPracticePool(student.getId(), normalizedSubjectCode);
+        List<SelectedPracticeItem> selectedItems = selectPracticeItems(activePool, riskyPool, safeQuestionCount);
+        if (selectedItems.isEmpty()) {
+            throw new CommonException("当前没有可用于练习的错题");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        WrongBookPracticePo practicePo = new WrongBookPracticePo();
+        practicePo.setStudentId(student.getId());
+        practicePo.setPracticeName("\u4eca\u65e5\u9519\u9898\u5c0f\u7ec3\u4e60");
+        practicePo.setPracticeType("smart_wrong_book");
+        practicePo.setQuestionCount(selectedItems.size());
+        practicePo.setWrongQuestionCount(countSelectedSource(selectedItems, POOL_ACTIVE_WRONG));
+        practicePo.setRiskyQuestionCount(countSelectedSource(selectedItems, POOL_RISKY_CORRECT));
+        practicePo.setSubmittedCount(0);
+        practicePo.setCorrectCount(0);
+        practicePo.setWrongCount(0);
+        practicePo.setAccuracyRate(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        practicePo.setStatus("generated");
+        practicePo.setGeneratedAt(now);
+        wrongBookPracticeMapper.insert(practicePo);
+
+        List<WrongBookPracticeItemPo> practiceItems = new ArrayList<>();
+        int sortNo = 1;
+        for (SelectedPracticeItem selectedItem : selectedItems) {
+            WrongBookItemPo wrongBookItem = selectedItem.item();
+            WrongBookPracticeItemPo itemPo = new WrongBookPracticeItemPo();
+            itemPo.setPracticeId(practicePo.getId());
+            itemPo.setStudentId(student.getId());
+            itemPo.setWrongBookId(wrongBookItem.getId());
+            itemPo.setQuestionNo(wrongBookItem.getQuestionNo());
+            itemPo.setSubjectCode(wrongBookItem.getSubjectCode());
+            itemPo.setQuestionText(wrongBookItem.getQuestionText());
+            itemPo.setCorrectAnswer(wrongBookItem.getCorrectAnswer());
+            itemPo.setItemSourceType(selectedItem.sourceType());
+            itemPo.setItemWeight(itemWeight(wrongBookItem));
+            itemPo.setResultStatus(RESULT_UNANSWERED);
+            itemPo.setSortNo(sortNo++);
+            wrongBookPracticeItemMapper.insert(itemPo);
+            practiceItems.add(itemPo);
+        }
+
+        return toPracticePlanVo(practicePo, practiceItems);
+    }
+
+    @Override
+    @Transactional
+    public WrongBookPracticeSubmitResultVo submitStudentPractice(String authorization, WrongBookPracticeSubmitDto submitDto) {
+        if (submitDto == null || submitDto.getPracticeId() == null) {
+            throw new CommonException("practiceId不能为空");
+        }
+        UserPo studentUser = resolveStudentUser(authorization);
+        StudentPo student = requireStudent(studentUser.getId());
+        WrongBookPracticePo practicePo = requirePracticeForStudent(student.getId(), submitDto.getPracticeId());
+        if ("completed".equalsIgnoreCase(defaultString(practicePo.getStatus(), ""))) {
+            throw new CommonException("本次练习已经提交");
+        }
+
+        Map<Long, WrongBookPracticeSubmitItemDto> submittedItemMap = defaultList(submitDto.getItems()).stream()
+                .filter(item -> item != null && item.getPracticeItemId() != null)
+                .collect(Collectors.toMap(
+                        WrongBookPracticeSubmitItemDto::getPracticeItemId,
+                        Function.identity(),
+                        (left, right) -> right,
+                        LinkedHashMap::new
+                ));
+        if (submittedItemMap.isEmpty()) {
+            throw new CommonException("练习提交明细不能为空");
+        }
+
+        List<WrongBookPracticeItemPo> practiceItems = wrongBookPracticeItemMapper.selectList(
+                new LambdaQueryWrapper<WrongBookPracticeItemPo>()
+                        .eq(WrongBookPracticeItemPo::getPracticeId, practicePo.getId())
+                        .eq(WrongBookPracticeItemPo::getStudentId, student.getId())
+                        .orderByAsc(WrongBookPracticeItemPo::getSortNo)
+                        .orderByAsc(WrongBookPracticeItemPo::getId)
+        );
+        Map<Long, WrongBookPracticeItemPo> practiceItemMap = practiceItems.stream()
+                .collect(Collectors.toMap(WrongBookPracticeItemPo::getId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        for (Long practiceItemId : submittedItemMap.keySet()) {
+            if (!practiceItemMap.containsKey(practiceItemId)) {
+                throw new CommonException("练习题目不属于本次练习");
+            }
+        }
+
+        Set<Long> wrongBookIds = submittedItemMap.keySet().stream()
+                .map(practiceItemMap::get)
+                .filter(Objects::nonNull)
+                .map(WrongBookPracticeItemPo::getWrongBookId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, WrongBookItemPo> wrongBookMap = wrongBookIds.isEmpty()
+                ? Collections.emptyMap()
+                : wrongBookItemMapper.selectBatchIds(wrongBookIds).stream()
+                .filter(item -> Objects.equals(item.getStudentId(), student.getId()))
+                .collect(Collectors.toMap(WrongBookItemPo::getId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+
+        LocalDateTime now = LocalDateTime.now();
+        int submittedCount = 0;
+        int correctCount = 0;
+        int wrongCount = 0;
+        int masteredCount = 0;
+        int returnedToActiveCount = 0;
+        for (Map.Entry<Long, WrongBookPracticeSubmitItemDto> entry : submittedItemMap.entrySet()) {
+            WrongBookPracticeItemPo practiceItem = practiceItemMap.get(entry.getKey());
+            WrongBookPracticeSubmitItemDto submitItem = entry.getValue();
+            if (submitItem.getWrongBookId() != null && !Objects.equals(submitItem.getWrongBookId(), practiceItem.getWrongBookId())) {
+                throw new CommonException("错题记录与练习题目不匹配");
+            }
+
+            String resultStatus = normalizePracticeResult(submitItem, practiceItem);
+            practiceItem.setStudentAnswer(trimToNull(submitItem.getStudentAnswer()));
+            practiceItem.setResultStatus(resultStatus);
+            practiceItem.setUsedDurationSeconds(nonNegativeInteger(submitItem.getUsedDurationSeconds()));
+            practiceItem.setSubmittedAt(now);
+            wrongBookPracticeItemMapper.updateById(practiceItem);
+
+            if (RESULT_UNANSWERED.equals(resultStatus)) {
+                continue;
+            }
+            submittedCount++;
+            WrongBookItemPo wrongBookItem = wrongBookMap.get(practiceItem.getWrongBookId());
+            if (wrongBookItem == null) {
+                continue;
+            }
+            if (RESULT_CORRECT.equals(resultStatus)) {
+                correctCount++;
+                if (applyCorrectPracticeResult(wrongBookItem, now)) {
+                    masteredCount++;
+                }
+            } else {
+                wrongCount++;
+                if (applyWrongPracticeResult(wrongBookItem, now)) {
+                    returnedToActiveCount++;
+                }
+            }
+            wrongBookItemMapper.updateById(wrongBookItem);
+        }
+
+        BigDecimal accuracyRate = submittedCount == 0
+                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.valueOf(correctCount).divide(BigDecimal.valueOf(submittedCount), 2, RoundingMode.HALF_UP);
+        practicePo.setSubmittedCount(submittedCount);
+        practicePo.setCorrectCount(correctCount);
+        practicePo.setWrongCount(wrongCount);
+        practicePo.setAccuracyRate(accuracyRate);
+        practicePo.setStatus("completed");
+        practicePo.setStartedAt(defaultDateTime(practicePo.getStartedAt(), practicePo.getGeneratedAt()));
+        practicePo.setSubmittedAt(now);
+        wrongBookPracticeMapper.updateById(practicePo);
+
+        WrongBookPracticeSubmitResultVo resultVo = new WrongBookPracticeSubmitResultVo();
+        resultVo.setPracticeId(practicePo.getId());
+        resultVo.setCorrectCount(correctCount);
+        resultVo.setWrongCount(wrongCount);
+        resultVo.setAccuracyRate(accuracyRate);
+        resultVo.setMasteredCount(masteredCount);
+        resultVo.setReturnedToActiveCount(returnedToActiveCount);
+        return resultVo;
+    }
+
+    @Override
+    public PageDTO<WrongBookPracticeHistoryVo> pageStudentPracticeHistory(String authorization, Integer pageNo, Integer pageSize) {
+        UserPo studentUser = resolveStudentUser(authorization);
+        StudentPo student = requireStudent(studentUser.getId());
+        List<WrongBookPracticePo> all = wrongBookPracticeMapper.selectList(
+                new LambdaQueryWrapper<WrongBookPracticePo>()
+                        .eq(WrongBookPracticePo::getStudentId, student.getId())
+                        .orderByDesc(WrongBookPracticePo::getGeneratedAt)
+                        .orderByDesc(WrongBookPracticePo::getId)
+        );
+        PageSlice<WrongBookPracticePo> slice = slice(all, pageNo, pageSize);
+        return PageDTO.of(
+                slice.items().stream().map(this::toPracticeHistoryVo).toList(),
+                slice.total(),
+                slice.pageNo(),
+                slice.pageSize()
+        );
+    }
+
+    @Override
+    public WrongBookPracticeDetailVo getStudentPractice(String authorization, Long practiceId) {
+        UserPo studentUser = resolveStudentUser(authorization);
+        StudentPo student = requireStudent(studentUser.getId());
+        WrongBookPracticePo practicePo = requirePracticeForStudent(student.getId(), practiceId);
+        List<WrongBookPracticeItemPo> practiceItems = wrongBookPracticeItemMapper.selectList(
+                new LambdaQueryWrapper<WrongBookPracticeItemPo>()
+                        .eq(WrongBookPracticeItemPo::getPracticeId, practicePo.getId())
+                        .eq(WrongBookPracticeItemPo::getStudentId, student.getId())
+                        .orderByAsc(WrongBookPracticeItemPo::getSortNo)
+                        .orderByAsc(WrongBookPracticeItemPo::getId)
+        );
+        return toPracticeDetailVo(practicePo, practiceItems);
     }
 
     private PageDTO<WrongBookListVo> pageWrongBooks(Long studentId, WrongBookQueryDto queryDto) {
@@ -373,6 +610,11 @@ public class WrongBookServiceImpl implements WrongBookService {
         vo.setWrongReasonLabel(wrongReasonLabel(itemPo.getWrongReasonCode()));
         vo.setTeacherName(loadTeacherName(itemPo));
         vo.setStatus(itemPo.getStatus());
+        vo.setPoolType(defaultString(itemPo.getPoolType(), resolveDefaultPoolType(itemPo)));
+        vo.setCorrectStreak(defaultInteger(itemPo.getCorrectStreak(), 0));
+        vo.setPracticeCount(defaultInteger(itemPo.getPracticeCount(), 0));
+        vo.setLastPracticeResult(itemPo.getLastPracticeResult());
+        vo.setLastPracticedAt(formatTime(itemPo.getLastPracticedAt()));
         vo.setCreatedAt(formatTime(itemPo.getCreatedAt()));
         vo.setLastFixedAt(formatTime(itemPo.getLastFixedAt()));
         return vo;
@@ -397,11 +639,251 @@ public class WrongBookServiceImpl implements WrongBookService {
         vo.setWrongReasonLabel(wrongReasonLabel(itemPo.getWrongReasonCode()));
         vo.setTeacherName(loadTeacherName(itemPo));
         vo.setStatus(itemPo.getStatus());
+        vo.setPoolType(defaultString(itemPo.getPoolType(), resolveDefaultPoolType(itemPo)));
+        vo.setCorrectStreak(defaultInteger(itemPo.getCorrectStreak(), 0));
+        vo.setPracticeCount(defaultInteger(itemPo.getPracticeCount(), 0));
+        vo.setLastPracticeResult(itemPo.getLastPracticeResult());
+        vo.setLastPracticedAt(formatTime(itemPo.getLastPracticedAt()));
         vo.setLastFixedText(itemPo.getLastFixedText());
         vo.setLastFixedAt(formatTime(itemPo.getLastFixedAt()));
         vo.setFixCount(defaultInteger(itemPo.getFixCount(), 0));
         vo.setAssets(defaultList(assets).stream().map(this::toWrongBookAssetVo).toList());
         return vo;
+    }
+
+    private WrongBookPracticePlanVo toPracticePlanVo(WrongBookPracticePo practicePo, List<WrongBookPracticeItemPo> items) {
+        WrongBookPracticePlanVo vo = new WrongBookPracticePlanVo();
+        vo.setPracticeId(practicePo.getId());
+        vo.setPracticeName(practicePo.getPracticeName());
+        vo.setQuestionCount(practicePo.getQuestionCount());
+        vo.setWrongQuestionCount(practicePo.getWrongQuestionCount());
+        vo.setRiskyQuestionCount(practicePo.getRiskyQuestionCount());
+        vo.setItems(defaultList(items).stream().map(this::toPracticeItemVo).toList());
+        return vo;
+    }
+
+    private WrongBookPracticeHistoryVo toPracticeHistoryVo(WrongBookPracticePo practicePo) {
+        WrongBookPracticeHistoryVo vo = new WrongBookPracticeHistoryVo();
+        vo.setPracticeId(practicePo.getId());
+        vo.setPracticeName(practicePo.getPracticeName());
+        vo.setPracticeType(practicePo.getPracticeType());
+        vo.setQuestionCount(defaultInteger(practicePo.getQuestionCount(), 0));
+        vo.setSubmittedCount(defaultInteger(practicePo.getSubmittedCount(), 0));
+        vo.setCorrectCount(defaultInteger(practicePo.getCorrectCount(), 0));
+        vo.setWrongCount(defaultInteger(practicePo.getWrongCount(), 0));
+        vo.setAccuracyRate(defaultBigDecimal(practicePo.getAccuracyRate(), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP));
+        vo.setStatus(practicePo.getStatus());
+        vo.setGeneratedAt(formatTime(practicePo.getGeneratedAt()));
+        vo.setSubmittedAt(formatTime(practicePo.getSubmittedAt()));
+        return vo;
+    }
+
+    private WrongBookPracticeDetailVo toPracticeDetailVo(WrongBookPracticePo practicePo, List<WrongBookPracticeItemPo> items) {
+        WrongBookPracticeDetailVo vo = new WrongBookPracticeDetailVo();
+        vo.setPracticeId(practicePo.getId());
+        vo.setPracticeName(practicePo.getPracticeName());
+        vo.setPracticeType(practicePo.getPracticeType());
+        vo.setQuestionCount(defaultInteger(practicePo.getQuestionCount(), 0));
+        vo.setWrongQuestionCount(defaultInteger(practicePo.getWrongQuestionCount(), 0));
+        vo.setRiskyQuestionCount(defaultInteger(practicePo.getRiskyQuestionCount(), 0));
+        vo.setSubmittedCount(defaultInteger(practicePo.getSubmittedCount(), 0));
+        vo.setCorrectCount(defaultInteger(practicePo.getCorrectCount(), 0));
+        vo.setWrongCount(defaultInteger(practicePo.getWrongCount(), 0));
+        vo.setAccuracyRate(defaultBigDecimal(practicePo.getAccuracyRate(), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP));
+        vo.setStatus(practicePo.getStatus());
+        vo.setGeneratedAt(formatTime(practicePo.getGeneratedAt()));
+        vo.setSubmittedAt(formatTime(practicePo.getSubmittedAt()));
+        vo.setItems(defaultList(items).stream().map(this::toPracticeItemVo).toList());
+        return vo;
+    }
+
+    private WrongBookPracticeItemVo toPracticeItemVo(WrongBookPracticeItemPo itemPo) {
+        WrongBookPracticeItemVo vo = new WrongBookPracticeItemVo();
+        vo.setPracticeItemId(itemPo.getId());
+        vo.setWrongBookId(itemPo.getWrongBookId());
+        vo.setQuestionNo(itemPo.getQuestionNo());
+        vo.setSubjectCode(itemPo.getSubjectCode());
+        vo.setSubjectName(subjectName(itemPo.getSubjectCode()));
+        vo.setQuestionText(itemPo.getQuestionText());
+        vo.setCorrectAnswer(itemPo.getCorrectAnswer());
+        vo.setStudentAnswer(itemPo.getStudentAnswer());
+        vo.setItemSourceType(itemPo.getItemSourceType());
+        vo.setItemWeight(itemPo.getItemWeight());
+        vo.setResultStatus(itemPo.getResultStatus());
+        vo.setUsedDurationSeconds(itemPo.getUsedDurationSeconds());
+        vo.setSortNo(itemPo.getSortNo());
+        vo.setSubmittedAt(formatTime(itemPo.getSubmittedAt()));
+        return vo;
+    }
+
+    private List<WrongBookItemPo> loadActivePracticePool(Long studentId, String subjectCode) {
+        LambdaQueryWrapper<WrongBookItemPo> wrapper = new LambdaQueryWrapper<WrongBookItemPo>()
+                .eq(WrongBookItemPo::getStudentId, studentId)
+                .and(query -> query.eq(WrongBookItemPo::getPoolType, POOL_ACTIVE_WRONG)
+                        .or(nested -> nested.isNull(WrongBookItemPo::getPoolType)
+                                .ne(WrongBookItemPo::getStatus, STATUS_MASTERED)));
+        if (StringUtils.hasText(subjectCode)) {
+            wrapper.eq(WrongBookItemPo::getSubjectCode, subjectCode);
+        }
+        return sortedPracticeCandidates(wrongBookItemMapper.selectList(wrapper));
+    }
+
+    private List<WrongBookItemPo> loadRiskyPracticePool(Long studentId, String subjectCode) {
+        LambdaQueryWrapper<WrongBookItemPo> wrapper = new LambdaQueryWrapper<WrongBookItemPo>()
+                .eq(WrongBookItemPo::getStudentId, studentId)
+                .ne(WrongBookItemPo::getStatus, STATUS_MASTERED)
+                .and(query -> query.eq(WrongBookItemPo::getPoolType, POOL_RISKY_CORRECT)
+                        .or(nested -> nested.eq(WrongBookItemPo::getLastPracticeResult, RESULT_CORRECT)
+                                .ge(WrongBookItemPo::getLastPracticedAt, LocalDateTime.now().minusDays(7))));
+        if (StringUtils.hasText(subjectCode)) {
+            wrapper.eq(WrongBookItemPo::getSubjectCode, subjectCode);
+        }
+        return sortedPracticeCandidates(wrongBookItemMapper.selectList(wrapper));
+    }
+
+    private List<WrongBookItemPo> sortedPracticeCandidates(List<WrongBookItemPo> items) {
+        return defaultList(items).stream()
+                .sorted(Comparator
+                        .comparing(this::itemWeight, Comparator.reverseOrder())
+                        .thenComparing(item -> item.getLastPracticedAt() == null ? LocalDateTime.MIN : item.getLastPracticedAt())
+                        .thenComparing(WrongBookItemPo::getId))
+                .toList();
+    }
+
+    private List<SelectedPracticeItem> selectPracticeItems(List<WrongBookItemPo> activePool,
+                                                           List<WrongBookItemPo> riskyPool,
+                                                           int questionCount) {
+        int riskyTarget = questionCount / 5;
+        int activeTarget = questionCount - riskyTarget;
+        List<SelectedPracticeItem> selectedItems = new ArrayList<>();
+        Set<Long> selectedIds = new LinkedHashSet<>();
+
+        takePracticeItems(activePool, POOL_ACTIVE_WRONG, activeTarget, selectedIds, selectedItems);
+        takePracticeItems(riskyPool, POOL_RISKY_CORRECT, riskyTarget, selectedIds, selectedItems);
+        takePracticeItems(activePool, POOL_ACTIVE_WRONG, questionCount - selectedItems.size(), selectedIds, selectedItems);
+        takePracticeItems(riskyPool, POOL_RISKY_CORRECT, questionCount - selectedItems.size(), selectedIds, selectedItems);
+        return selectedItems;
+    }
+
+    private void takePracticeItems(List<WrongBookItemPo> source,
+                                   String sourceType,
+                                   int limit,
+                                   Set<Long> selectedIds,
+                                   List<SelectedPracticeItem> selectedItems) {
+        if (limit <= 0) {
+            return;
+        }
+        List<WrongBookItemPo> availableItems = defaultList(source).stream()
+                .filter(item -> item != null && item.getId() != null && !selectedIds.contains(item.getId()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        int remaining = Math.min(limit, availableItems.size());
+        while (remaining > 0 && !availableItems.isEmpty()) {
+            WrongBookItemPo selectedItem = removeWeightedRandomItem(availableItems);
+            if (selectedItem == null || !selectedIds.add(selectedItem.getId())) {
+                continue;
+            }
+            selectedItems.add(new SelectedPracticeItem(selectedItem, sourceType));
+            remaining--;
+        }
+    }
+
+    private WrongBookItemPo removeWeightedRandomItem(List<WrongBookItemPo> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+
+        BigDecimal totalWeight = candidates.stream()
+                .map(this::effectivePracticeWeight)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (totalWeight.compareTo(BigDecimal.ZERO) <= 0) {
+            return candidates.remove(ThreadLocalRandom.current().nextInt(candidates.size()));
+        }
+
+        double randomValue = ThreadLocalRandom.current().nextDouble(totalWeight.doubleValue());
+        double cumulativeWeight = 0D;
+        for (int i = 0; i < candidates.size(); i++) {
+            cumulativeWeight += effectivePracticeWeight(candidates.get(i)).doubleValue();
+            if (randomValue < cumulativeWeight || i == candidates.size() - 1) {
+                return candidates.remove(i);
+            }
+        }
+
+        return candidates.remove(candidates.size() - 1);
+    }
+
+    private int countSelectedSource(List<SelectedPracticeItem> selectedItems, String sourceType) {
+        return (int) defaultList(selectedItems).stream()
+                .filter(item -> sourceType.equals(item.sourceType()))
+                .count();
+    }
+
+    private boolean applyCorrectPracticeResult(WrongBookItemPo itemPo, LocalDateTime now) {
+        int correctStreak = defaultInteger(itemPo.getCorrectStreak(), 0) + 1;
+        BigDecimal masteryScore = itemWeight(itemPo).subtract(SCORE_CORRECT_DELTA).max(BigDecimal.ZERO);
+        itemPo.setCorrectStreak(correctStreak);
+        itemPo.setPracticeCount(defaultInteger(itemPo.getPracticeCount(), 0) + 1);
+        itemPo.setLastPracticeResult(RESULT_CORRECT);
+        itemPo.setLastPracticedAt(now);
+        itemPo.setMasteryScore(masteryScore);
+        if (correctStreak >= 2) {
+            itemPo.setPoolType(POOL_MASTERED_ARCHIVE);
+            itemPo.setStatus(STATUS_MASTERED);
+            return true;
+        }
+        itemPo.setPoolType(POOL_RISKY_CORRECT);
+        return false;
+    }
+
+    private boolean applyWrongPracticeResult(WrongBookItemPo itemPo, LocalDateTime now) {
+        boolean wasMastered = STATUS_MASTERED.equalsIgnoreCase(defaultString(itemPo.getStatus(), ""))
+                || POOL_MASTERED_ARCHIVE.equals(itemPo.getPoolType());
+        boolean returnedToActive = wasMastered || POOL_RISKY_CORRECT.equals(itemPo.getPoolType());
+        itemPo.setCorrectStreak(0);
+        itemPo.setPracticeCount(defaultInteger(itemPo.getPracticeCount(), 0) + 1);
+        itemPo.setLastPracticeResult(RESULT_WRONG);
+        itemPo.setLastPracticedAt(now);
+        itemPo.setMasteryScore(itemWeight(itemPo).add(SCORE_WRONG_DELTA));
+        itemPo.setPoolType(POOL_ACTIVE_WRONG);
+        if (wasMastered) {
+            itemPo.setStatus(STATUS_FIXED);
+        } else if (!StringUtils.hasText(itemPo.getStatus())) {
+            itemPo.setStatus(STATUS_PENDING_FIX);
+        }
+        return returnedToActive;
+    }
+
+    private String normalizePracticeResult(WrongBookPracticeSubmitItemDto submitItem, WrongBookPracticeItemPo practiceItem) {
+        String resultStatus = trimToNull(submitItem.getResultStatus());
+        if (RESULT_CORRECT.equalsIgnoreCase(resultStatus)) {
+            return RESULT_CORRECT;
+        }
+        if (RESULT_WRONG.equalsIgnoreCase(resultStatus)) {
+            return RESULT_WRONG;
+        }
+        if (RESULT_UNANSWERED.equalsIgnoreCase(resultStatus)) {
+            return RESULT_UNANSWERED;
+        }
+        String studentAnswer = trimToNull(submitItem.getStudentAnswer());
+        if (!StringUtils.hasText(studentAnswer)) {
+            return RESULT_UNANSWERED;
+        }
+        String correctAnswer = trimToNull(practiceItem.getCorrectAnswer());
+        if (StringUtils.hasText(correctAnswer) && correctAnswer.equalsIgnoreCase(studentAnswer)) {
+            return RESULT_CORRECT;
+        }
+        return RESULT_WRONG;
+    }
+
+    private WrongBookPracticePo requirePracticeForStudent(Long studentId, Long practiceId) {
+        if (practiceId == null) {
+            throw new CommonException("practiceId不能为空");
+        }
+        WrongBookPracticePo practicePo = wrongBookPracticeMapper.selectById(practiceId);
+        if (practicePo == null || !Objects.equals(practicePo.getStudentId(), studentId)) {
+            throw new CommonException("练习记录不存在");
+        }
+        return practicePo;
     }
 
     private HomeworkAssetVo toHomeworkAssetVo(WrongBookAssetPo assetPo) {
@@ -449,6 +931,15 @@ public class WrongBookServiceImpl implements WrongBookService {
             assetPo.setSortNo(sortNo++);
             wrongBookAssetMapper.insert(assetPo);
         }
+    }
+
+    private void initPracticeState(WrongBookItemPo itemPo, String sourceScene) {
+        itemPo.setPoolType(POOL_ACTIVE_WRONG);
+        itemPo.setCorrectStreak(0);
+        itemPo.setMasteryScore(DEFAULT_MASTERY_SCORE);
+        itemPo.setPracticeCount(0);
+        itemPo.setLastPracticeResult(null);
+        itemPo.setSourceScene(sourceScene);
     }
 
     private void validateTeacherScope(UserPo teacherUser, HomeworkTaskPo task, HomeworkPo homework) {
@@ -669,6 +1160,32 @@ public class WrongBookServiceImpl implements WrongBookService {
         return StringUtils.hasText(value) && !"all".equalsIgnoreCase(value.trim());
     }
 
+    private int normalizeQuestionCount(Integer questionCount) {
+        if (questionCount == null || questionCount < 1) {
+            return 10;
+        }
+        return Math.min(questionCount, 50);
+    }
+
+    private BigDecimal itemWeight(WrongBookItemPo itemPo) {
+        return defaultBigDecimal(itemPo == null ? null : itemPo.getMasteryScore(), DEFAULT_MASTERY_SCORE)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal effectivePracticeWeight(WrongBookItemPo itemPo) {
+        return itemWeight(itemPo).max(MIN_RANDOM_WEIGHT);
+    }
+
+    private String resolveDefaultPoolType(WrongBookItemPo itemPo) {
+        if (itemPo == null) {
+            return POOL_ACTIVE_WRONG;
+        }
+        if (STATUS_MASTERED.equalsIgnoreCase(defaultString(itemPo.getStatus(), ""))) {
+            return POOL_MASTERED_ARCHIVE;
+        }
+        return POOL_ACTIVE_WRONG;
+    }
+
     private String wrongReasonLabel(String wrongReasonCode) {
         String normalized = trimToNull(wrongReasonCode);
         if (!StringUtils.hasText(normalized)) {
@@ -697,6 +1214,21 @@ public class WrongBookServiceImpl implements WrongBookService {
         return value == null ? defaultValue : value;
     }
 
+    private Integer nonNegativeInteger(Integer value) {
+        if (value == null) {
+            return null;
+        }
+        return Math.max(0, value);
+    }
+
+    private BigDecimal defaultBigDecimal(BigDecimal value, BigDecimal defaultValue) {
+        return value == null ? defaultValue : value;
+    }
+
+    private LocalDateTime defaultDateTime(LocalDateTime value, LocalDateTime defaultValue) {
+        return value == null ? defaultValue : value;
+    }
+
     private String formatTime(LocalDateTime time) {
         return time == null ? null : TIME_FORMATTER.format(time);
     }
@@ -718,5 +1250,8 @@ public class WrongBookServiceImpl implements WrongBookService {
     }
 
     private record PageSlice<T>(List<T> items, long total, int pageNo, int pageSize) {
+    }
+
+    private record SelectedPracticeItem(WrongBookItemPo item, String sourceType) {
     }
 }

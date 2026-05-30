@@ -3,6 +3,9 @@ export type StudentReviewStatus = 'unreviewed' | 'completed' | 'revision_require
 export type StudentMessageKind = 'assignment' | 'review' | 'remind' | 'system'
 export type StudentWrongBookStatus = 'pending_fix' | 'fixed' | 'mastered'
 export type StudentWrongBookSourceType = 'teacher_mark' | 'student_manual' | 'system_auto'
+export type StudentWrongBookPoolType = 'active_wrong' | 'risky_correct' | 'mastered_archive'
+export type StudentWrongBookPracticeStatus = 'generated' | 'in_progress' | 'completed' | 'abandoned'
+export type StudentWrongBookPracticeResultStatus = 'correct' | 'wrong' | 'unanswered'
 
 export interface StudentHomeworkAttachment {
   id?: string
@@ -92,6 +95,12 @@ export interface StudentWrongBookRecord {
   lastFixedAt?: string
   lastFixedText?: string
   fixCount?: number
+  poolType?: StudentWrongBookPoolType
+  correctStreak?: number
+  masteryScore?: number
+  practiceCount?: number
+  lastPracticedAt?: string
+  lastPracticeResult?: StudentWrongBookPracticeResultStatus
   assets: StudentWrongBookAsset[]
 }
 
@@ -135,4 +144,78 @@ export interface StudentWrongBookCreatePayload {
 export interface StudentWrongBookFixPayload {
   fixedText: string
   assets?: StudentWrongBookAsset[]
+}
+
+export interface StudentWrongBookPracticeItem {
+  practiceItemId: string | number
+  wrongBookId: string | number
+  questionNo?: string
+  subjectCode?: string
+  subjectName?: string
+  questionText: string
+  correctAnswer?: string
+  itemSourceType: StudentWrongBookPoolType
+  itemWeight?: number
+  sortNo: number
+}
+
+export interface StudentWrongBookPracticePlan {
+  practiceId: string | number
+  practiceName: string
+  questionCount: number
+  wrongQuestionCount: number
+  riskyQuestionCount: number
+  items: StudentWrongBookPracticeItem[]
+}
+
+export interface StudentWrongBookPracticeSubmitItem {
+  practiceItemId: string | number
+  wrongBookId: string | number
+  studentAnswer: string
+  resultStatus: StudentWrongBookPracticeResultStatus
+  usedDurationSeconds: number
+}
+
+export interface StudentWrongBookPracticeSubmitPayload {
+  practiceId: string | number
+  items: StudentWrongBookPracticeSubmitItem[]
+}
+
+export interface StudentWrongBookPracticeSubmitResult {
+  practiceId: string | number
+  correctCount: number
+  wrongCount: number
+  accuracyRate: number
+  masteredCount: number
+  returnedToActiveCount: number
+}
+
+export interface StudentWrongBookPracticeReviewItem extends StudentWrongBookPracticeItem {
+  studentAnswer: string
+  resultStatus: StudentWrongBookPracticeResultStatus
+  usedDurationSeconds: number
+}
+
+export interface StudentWrongBookPracticeHistoryRecord {
+  id?: string | number
+  practiceId?: string | number
+  practiceName: string
+  practiceType?: string
+  questionCount: number
+  wrongQuestionCount?: number
+  riskyQuestionCount?: number
+  submittedCount?: number
+  correctCount: number
+  wrongCount: number
+  accuracyRate: number
+  status: StudentWrongBookPracticeStatus
+  generatedAt?: string
+  startedAt?: string
+  submittedAt?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface StudentWrongBookPracticeDetail extends StudentWrongBookPracticeHistoryRecord {
+  items: StudentWrongBookPracticeReviewItem[]
 }

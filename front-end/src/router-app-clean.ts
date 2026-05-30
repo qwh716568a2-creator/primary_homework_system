@@ -29,6 +29,12 @@ const router = createRouter({
           meta: { title: '\u5b66\u751f\u9996\u9875' }
         },
         {
+          path: 'homeworks',
+          name: 'student-homeworks',
+          component: () => import('@/views/StudentHomeworkListPage.vue'),
+          meta: { title: '\u6211\u7684\u4f5c\u4e1a' }
+        },
+        {
           path: 'homeworks/:id',
           name: 'student-homework-detail',
           component: () => import('@/views/StudentHomeworkDetailPage.vue'),
@@ -57,6 +63,30 @@ const router = createRouter({
           name: 'student-wrong-book',
           component: () => import('@/views/StudentWrongBookPage.vue'),
           meta: { title: '\u9519\u9898\u672c' }
+        },
+        {
+          path: 'wrong-book/practice',
+          name: 'student-wrong-book-practice',
+          component: () => import('@/views/StudentWrongBookPracticePage.vue'),
+          meta: { title: '\u9519\u9898\u5c0f\u7ec3\u4e60' }
+        },
+        {
+          path: 'wrong-book/practice/result',
+          name: 'student-wrong-book-practice-result',
+          component: () => import('@/views/StudentWrongBookPracticeResultPage.vue'),
+          meta: { title: '\u7ec3\u4e60\u7ed3\u679c' }
+        },
+        {
+          path: 'wrong-book/practice/history',
+          name: 'student-wrong-book-practice-history',
+          component: () => import('@/views/StudentWrongBookPracticeHistoryPage.vue'),
+          meta: { title: '\u7ec3\u4e60\u8bb0\u5f55' }
+        },
+        {
+          path: 'wrong-book/practice/:practiceId',
+          name: 'student-wrong-book-practice-detail',
+          component: () => import('@/views/StudentWrongBookPracticeDetailPage.vue'),
+          meta: { title: '\u7ec3\u4e60\u8be6\u60c5' }
         },
         {
           path: 'messages',

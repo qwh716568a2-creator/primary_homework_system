@@ -25,6 +25,11 @@ public class WrongBookDetailVo {
     private String wrongReasonLabel;
     private String teacherName;
     private String status;
+    private String poolType;
+    private Integer correctStreak;
+    private Integer practiceCount;
+    private String lastPracticeResult;
+    private String lastPracticedAt;
     private String lastFixedText;
     private String lastFixedAt;
     private Integer fixCount;

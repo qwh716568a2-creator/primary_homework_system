@@ -20,6 +20,18 @@ export const studentWrongBookStatusMap = {
   mastered: { label: '已掌握', tone: 'teal' }
 } as const
 
+export const studentWrongBookPoolMap = {
+  active_wrong: { label: '活跃错题', tone: 'rose' },
+  risky_correct: { label: '风险正确', tone: 'amber' },
+  mastered_archive: { label: '已掌握归档', tone: 'teal' }
+} as const
+
+export const studentWrongBookPracticeResultMap = {
+  correct: { label: '答对', tone: 'teal' },
+  wrong: { label: '答错', tone: 'rose' },
+  unanswered: { label: '未作答', tone: 'slate' }
+} as const
+
 export const studentMessageKindMap: Record<string, string> = {
   assignment: '作业通知',
   review: '批改反馈',
@@ -55,6 +67,18 @@ export function getStudentReviewStatusLabel(status?: string) {
 
 export function getStudentWrongBookStatusLabel(status?: string) {
   return status ? studentWrongBookStatusMap[status as keyof typeof studentWrongBookStatusMap]?.label || status : '待订正'
+}
+
+export function getStudentWrongBookPoolLabel(poolType?: string) {
+  return poolType
+    ? studentWrongBookPoolMap[poolType as keyof typeof studentWrongBookPoolMap]?.label || poolType
+    : '活跃错题'
+}
+
+export function getStudentWrongBookPracticeResultLabel(result?: string) {
+  return result
+    ? studentWrongBookPracticeResultMap[result as keyof typeof studentWrongBookPracticeResultMap]?.label || result
+    : '未作答'
 }
 
 export function getStudentMessageKindLabel(kind?: string) {

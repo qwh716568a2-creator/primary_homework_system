@@ -2,6 +2,7 @@ package com.primaryhomework.backend.controller;
 
 import com.primaryhomework.backend.entity.dto.WrongBookCreateDto;
 import com.primaryhomework.backend.entity.dto.WrongBookFixDto;
+import com.primaryhomework.backend.entity.dto.WrongBookPracticeSubmitDto;
 import com.primaryhomework.backend.entity.dto.WrongBookQueryDto;
 import com.primaryhomework.backend.entity.dto.mobile.NotificationSettingsDto;
 import com.primaryhomework.backend.entity.dto.mobile.PasswordCheckDto;
@@ -16,6 +17,10 @@ import com.primaryhomework.backend.entity.vo.mobile.SubmissionVo;
 import com.primaryhomework.backend.entity.vo.mobile.SubjectOptionVo;
 import com.primaryhomework.backend.entity.vo.mobile.WrongBookDetailVo;
 import com.primaryhomework.backend.entity.vo.mobile.WrongBookListVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticeDetailVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticeHistoryVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticePlanVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticeSubmitResultVo;
 import com.primaryhomework.backend.entity.vo.mobile.WrongBookSaveVo;
 import com.primaryhomework.backend.service.MobilePreferenceService;
 import com.primaryhomework.backend.service.StudentService;
@@ -229,5 +234,39 @@ public class StudentController {
     ) {
         studentService.markWrongBookMastered(authorization, wrongBookId);
         return R.ok();
+    }
+
+    @GetMapping("/wrong-book/practice/plan")
+    public R<WrongBookPracticePlanVo> generateWrongBookPracticePlan(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestParam(required = false) String subjectCode,
+            @RequestParam(required = false) Integer questionCount
+    ) {
+        return R.ok(studentService.generateWrongBookPracticePlan(authorization, subjectCode, questionCount));
+    }
+
+    @PostMapping("/wrong-book/practice/submit")
+    public R<WrongBookPracticeSubmitResultVo> submitWrongBookPractice(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @Valid @RequestBody WrongBookPracticeSubmitDto submitDto
+    ) {
+        return R.ok(studentService.submitWrongBookPractice(authorization, submitDto));
+    }
+
+    @GetMapping("/wrong-book/practice/history")
+    public R<PageDTO<WrongBookPracticeHistoryVo>> listWrongBookPracticeHistory(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestParam(required = false, defaultValue = "1") Integer pageNo,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize
+    ) {
+        return R.ok(studentService.listWrongBookPracticeHistory(authorization, pageNo, pageSize));
+    }
+
+    @GetMapping("/wrong-book/practice/{practiceId}")
+    public R<WrongBookPracticeDetailVo> getWrongBookPractice(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable Long practiceId
+    ) {
+        return R.ok(studentService.getWrongBookPractice(authorization, practiceId));
     }
 }

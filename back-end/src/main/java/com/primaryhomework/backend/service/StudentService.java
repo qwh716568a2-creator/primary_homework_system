@@ -2,6 +2,7 @@ package com.primaryhomework.backend.service;
 
 import com.primaryhomework.backend.entity.dto.WrongBookCreateDto;
 import com.primaryhomework.backend.entity.dto.WrongBookFixDto;
+import com.primaryhomework.backend.entity.dto.WrongBookPracticeSubmitDto;
 import com.primaryhomework.backend.entity.dto.WrongBookQueryDto;
 import com.primaryhomework.backend.entity.dto.mobile.SubmitDto;
 import com.primaryhomework.backend.entity.vo.PageDTO;
@@ -12,6 +13,10 @@ import com.primaryhomework.backend.entity.vo.mobile.SubmissionVo;
 import com.primaryhomework.backend.entity.vo.mobile.SubjectOptionVo;
 import com.primaryhomework.backend.entity.vo.mobile.WrongBookDetailVo;
 import com.primaryhomework.backend.entity.vo.mobile.WrongBookListVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticeDetailVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticeHistoryVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticePlanVo;
+import com.primaryhomework.backend.entity.vo.mobile.WrongBookPracticeSubmitResultVo;
 import com.primaryhomework.backend.entity.vo.mobile.WrongBookSaveVo;
 
 import java.util.List;
@@ -45,4 +50,12 @@ public interface StudentService {
     void fixWrongBook(String authorization, Long wrongBookId, WrongBookFixDto fixDto);
 
     void markWrongBookMastered(String authorization, Long wrongBookId);
+
+    WrongBookPracticePlanVo generateWrongBookPracticePlan(String authorization, String subjectCode, Integer questionCount);
+
+    WrongBookPracticeSubmitResultVo submitWrongBookPractice(String authorization, WrongBookPracticeSubmitDto submitDto);
+
+    PageDTO<WrongBookPracticeHistoryVo> listWrongBookPracticeHistory(String authorization, Integer pageNo, Integer pageSize);
+
+    WrongBookPracticeDetailVo getWrongBookPractice(String authorization, Long practiceId);
 }

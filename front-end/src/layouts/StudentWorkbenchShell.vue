@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Bell, CollectionTag, House, Menu, SwitchButton, User } from '@element-plus/icons-vue'
+import { Bell, CollectionTag, House, Menu, Reading, SwitchButton, User } from '@element-plus/icons-vue'
 import { useStudentPortalStore } from '@/stores/studentPortal'
 
 const router = useRouter()
@@ -12,13 +12,19 @@ const mobileNavOpen = ref(false)
 const menuItems = [
   {
     label: '学习台',
-    caption: '查看今日作业与进度',
+    caption: '查看学习概览与提醒',
     to: '/student/home',
     icon: House
   },
   {
+    label: '我的作业',
+    caption: '查看作业清单与状态',
+    to: '/student/homeworks',
+    icon: Reading
+  },
+  {
     label: '错题本',
-    caption: '整理错题与订正记录',
+    caption: '智能练习与订正记录',
     to: '/student/wrong-book',
     icon: CollectionTag
   },

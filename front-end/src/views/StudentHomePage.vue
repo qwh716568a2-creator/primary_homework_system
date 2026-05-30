@@ -1,47 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Bell, Calendar, ChatDotRound, Reading } from '@element-plus/icons-vue'
+import { Bell, Calendar, Reading } from '@element-plus/icons-vue'
 import MetricCard from '@/components/MetricCard.vue'
-import StudentHomeworkCard from '@/components/StudentHomeworkCard.vue'
 import { useStudentPortalStore } from '@/stores/studentPortal'
 import { formatSubmitTypes } from '@/utils/format-labels'
 
 const router = useRouter()
 const store = useStudentPortalStore()
-const activeStatus = ref<'all' | 'pending' | 'submitted' | 'revision' | 'completed'>('all')
-const activeSubject = ref('all')
-
-const statusOptions = [
-  { key: 'all', label: '全部' },
-  { key: 'pending', label: '待完成' },
-  { key: 'submitted', label: '已提交' },
-  { key: 'revision', label: '待订正' },
-  { key: 'completed', label: '已完成' }
-] as const
-
-const subjectOptions = computed(() => [
-  { key: 'all', label: '全部科目' },
-  ...Array.from(new Set(store.homeworks.map((item) => item.subject))).map((subject) => ({
-    key: subject,
-    label: subject
-  }))
-])
-
-const filteredHomeworks = computed(() => {
-  let list = store.homeworks
-
-  if (activeStatus.value !== 'all') {
-    list = list.filter((item) => item.status === activeStatus.value)
-  }
-
-  if (activeSubject.value !== 'all') {
-    list = list.filter((item) => item.subject === activeSubject.value)
-  }
-
-  return list
-})
 
 const latestHomeworks = computed(() =>
   [...store.homeworks]
@@ -63,6 +30,10 @@ async function loadPage() {
 
 function openHomework(homeworkId: string) {
   void router.push(`/student/homeworks/${homeworkId}`)
+}
+
+function goHomeworks() {
+  void router.push('/student/homeworks')
 }
 
 function goMessages() {
@@ -114,7 +85,7 @@ onMounted(() => {
             <span class="student-home-hero__tag">最新作业</span>
             <h3>优先处理最近布置或最近到期的任务</h3>
           </div>
-          <el-button text @click="activeStatus = 'all'">查看全部</el-button>
+          <el-button text @click="goHomeworks">我的作业</el-button>
         </div>
 
         <button
@@ -196,50 +167,6 @@ onMounted(() => {
       </article>
     </section>
 
-    <section class="surface-card section-card">
-      <div class="dashboard-section-head dashboard-section-head--compact">
-        <div>
-          <h3>作业清单</h3>
-        </div>
-      </div>
-
-      <div class="student-filter-strip">
-        <div class="student-filter-strip__group">
-          <button
-            v-for="option in statusOptions"
-            :key="option.key"
-            type="button"
-            :class="['student-filter-chip', { 'student-filter-chip--active': activeStatus === option.key }]"
-            @click="activeStatus = option.key"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-
-        <div class="student-filter-strip__group">
-          <button
-            v-for="option in subjectOptions"
-            :key="option.key"
-            type="button"
-            :class="['student-filter-chip', { 'student-filter-chip--active': activeSubject === option.key }]"
-            @click="activeSubject = option.key"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-      </div>
-
-      <div v-if="filteredHomeworks.length" class="student-homework-grid">
-        <StudentHomeworkCard
-          v-for="item in filteredHomeworks"
-          :key="item.id"
-          :item="item"
-          @open="openHomework"
-        />
-      </div>
-
-      <div v-else class="empty-state">当前筛选下还没有作业，换个状态或科目看看。</div>
-    </section>
   </div>
 </template>
 
@@ -446,46 +373,6 @@ onMounted(() => {
   background: #ef4444;
 }
 
-.student-filter-strip {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.student-filter-strip__group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
-.student-filter-chip {
-  border: 0;
-  padding: 0.58rem 1rem;
-  border-radius: 999px;
-  background: rgba(241, 245, 249, 0.95);
-  color: #5f7488;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-
-.student-filter-chip--active,
-.student-filter-chip:hover {
-  color: white;
-  background: linear-gradient(135deg, #2563eb, #22c55e);
-}
-
-.student-homework-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  margin-top: 1.1rem;
-}
-
-.dashboard-section-head--compact {
-  margin-bottom: 0.9rem;
-}
-
 @media (max-width: 1320px) {
   .student-home-overview {
     grid-template-columns: 1fr;
@@ -493,8 +380,7 @@ onMounted(() => {
 }
 
 @media (max-width: 980px) {
-  .student-home-mini-grid,
-  .student-homework-grid {
+  .student-home-mini-grid {
     grid-template-columns: 1fr;
   }
 }

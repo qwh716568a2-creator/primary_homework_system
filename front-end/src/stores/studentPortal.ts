@@ -6,14 +6,18 @@ import {
   fetchStudentHomeworkList,
   fetchStudentMessageDetail,
   fetchStudentMessagePage,
+  fetchStudentWrongBookPracticeDetail,
+  fetchStudentWrongBookPracticeHistory,
   fetchStudentReviewList,
   fetchStudentSubmissionList,
   fetchStudentWrongBookDetail,
   fetchStudentWrongBookPage,
   fetchStudentWrongBookSubjects,
+  generateStudentWrongBookPracticePlan,
   markStudentMessageRead,
   markStudentWrongBookMastered,
   submitStudentHomework,
+  submitStudentWrongBookPractice,
   submitStudentWrongBookFix
 } from '@/api/student'
 import { clearAuthSession, getAuthSession, persistAuthSession } from '@/utils/auth-session-clean'
@@ -24,6 +28,14 @@ import type {
   StudentHomeworkSubmission,
   StudentMessageItem,
   StudentProfileSummary,
+  StudentWrongBookPoolType,
+  StudentWrongBookPracticeDetail,
+  StudentWrongBookPracticeHistoryRecord,
+  StudentWrongBookPracticePlan,
+  StudentWrongBookPracticeReviewItem,
+  StudentWrongBookPracticeSubmitItem,
+  StudentWrongBookPracticeSubmitPayload,
+  StudentWrongBookPracticeSubmitResult,
   StudentSubmitPayload,
   StudentSubjectOption,
   StudentWrongBookCreatePayload,
@@ -38,6 +50,11 @@ export const useStudentPortalStore = defineStore('student-portal', () => {
   const messages = ref<StudentMessageItem[]>([])
   const wrongBooks = ref<StudentWrongBookRecord[]>([])
   const wrongBookSubjects = ref<StudentSubjectOption[]>([])
+  const wrongBookPracticePlan = ref<StudentWrongBookPracticePlan | null>(null)
+  const wrongBookPracticeResult = ref<StudentWrongBookPracticeSubmitResult | null>(null)
+  const wrongBookPracticeReviewItems = ref<StudentWrongBookPracticeReviewItem[]>([])
+  const wrongBookPracticeHistory = ref<StudentWrongBookPracticeHistoryRecord[]>([])
+  const wrongBookPracticeDetailMap = ref<Record<string, StudentWrongBookPracticeDetail>>({})
   const homeworkDetails = ref<Record<string, StudentHomeworkRecord>>({})
   const submissionMap = ref<Record<string, StudentHomeworkSubmission[]>>({})
   const reviewMap = ref<Record<string, StudentHomeworkReview[]>>({})
@@ -51,6 +68,9 @@ export const useStudentPortalStore = defineStore('student-portal', () => {
     reviews: false,
     wrongBookDetail: false,
     subjects: false,
+    wrongBookPractice: false,
+    wrongBookPracticeHistory: false,
+    wrongBookPracticeDetail: false,
     action: false
   })
 
@@ -79,6 +99,15 @@ export const useStudentPortalStore = defineStore('student-portal', () => {
   const unreadMessageCount = computed(() => messages.value.filter((item) => item.unread).length)
   const pendingWrongBookCount = computed(
     () => wrongBooks.value.filter((item) => item.status === 'pending_fix').length
+  )
+  const activeWrongBookCount = computed(() =>
+    wrongBooks.value.filter((item) => resolveWrongBookPoolType(item) === 'active_wrong').length
+  )
+  const riskyCorrectWrongBookCount = computed(() =>
+    wrongBooks.value.filter((item) => resolveWrongBookPoolType(item) === 'risky_correct').length
+  )
+  const masteredArchiveWrongBookCount = computed(() =>
+    wrongBooks.value.filter((item) => resolveWrongBookPoolType(item) === 'mastered_archive').length
   )
 
   const statusOverview = computed(() => [
@@ -123,6 +152,11 @@ export const useStudentPortalStore = defineStore('student-portal', () => {
     messages.value = []
     wrongBooks.value = []
     wrongBookSubjects.value = []
+    wrongBookPracticePlan.value = null
+    wrongBookPracticeResult.value = null
+    wrongBookPracticeReviewItems.value = []
+    wrongBookPracticeHistory.value = []
+    wrongBookPracticeDetailMap.value = {}
     homeworkDetails.value = {}
     submissionMap.value = {}
     reviewMap.value = {}
@@ -296,12 +330,99 @@ export const useStudentPortalStore = defineStore('student-portal', () => {
     }
   }
 
+  async function createWrongBookPracticePlan(subjectCode = 'all', questionCount = 10) {
+    loading.wrongBookPractice = true
+    try {
+      const plan = await generateStudentWrongBookPracticePlan(subjectCode, questionCount)
+      wrongBookPracticePlan.value = plan
+      wrongBookPracticeResult.value = null
+      wrongBookPracticeReviewItems.value = []
+      return plan
+    } finally {
+      loading.wrongBookPractice = false
+    }
+  }
+
+  async function submitWrongBookPractice(payload: StudentWrongBookPracticeSubmitPayload) {
+    loading.wrongBookPractice = true
+    try {
+      const result = await submitStudentWrongBookPractice(payload)
+      wrongBookPracticeResult.value = result
+      wrongBookPracticeReviewItems.value = buildPracticeReviewItems(payload.items)
+      await Promise.all([loadWrongBooks(), loadWrongBookPracticeHistory()])
+      return result
+    } finally {
+      loading.wrongBookPractice = false
+    }
+  }
+
+  async function loadWrongBookPracticeHistory(pageNo = 1, pageSize = 20) {
+    loading.wrongBookPracticeHistory = true
+    try {
+      const data = await fetchStudentWrongBookPracticeHistory(pageNo, pageSize)
+      wrongBookPracticeHistory.value = data.list
+      return data
+    } finally {
+      loading.wrongBookPracticeHistory = false
+    }
+  }
+
+  async function loadWrongBookPracticeDetail(practiceId: string | number) {
+    loading.wrongBookPracticeDetail = true
+    try {
+      const detail = await fetchStudentWrongBookPracticeDetail(practiceId)
+      wrongBookPracticeDetailMap.value = {
+        ...wrongBookPracticeDetailMap.value,
+        [`${practiceId}`]: detail
+      }
+      return detail
+    } finally {
+      loading.wrongBookPracticeDetail = false
+    }
+  }
+
+  function resolveWrongBookPoolType(item: StudentWrongBookRecord): StudentWrongBookPoolType {
+    if (item.poolType) {
+      return item.poolType
+    }
+
+    return item.status === 'mastered' ? 'mastered_archive' : 'active_wrong'
+  }
+
+  function buildPracticeReviewItems(items: StudentWrongBookPracticeSubmitItem[]) {
+    const planItems = wrongBookPracticePlan.value?.items ?? []
+
+    return items.map((item) => {
+      const planItem = planItems.find((candidate) => `${candidate.practiceItemId}` === `${item.practiceItemId}`)
+
+      return {
+        practiceItemId: item.practiceItemId,
+        wrongBookId: item.wrongBookId,
+        questionText: planItem?.questionText ?? '',
+        questionNo: planItem?.questionNo,
+        subjectCode: planItem?.subjectCode,
+        subjectName: planItem?.subjectName,
+        correctAnswer: planItem?.correctAnswer,
+        itemSourceType: planItem?.itemSourceType ?? 'active_wrong',
+        itemWeight: planItem?.itemWeight,
+        sortNo: planItem?.sortNo ?? 0,
+        studentAnswer: item.studentAnswer,
+        resultStatus: item.resultStatus,
+        usedDurationSeconds: item.usedDurationSeconds
+      } satisfies StudentWrongBookPracticeReviewItem
+    })
+  }
+
   function getHomework(homeworkId: string) {
     return homeworkDetails.value[homeworkId] ?? homeworks.value.find((item) => item.id === homeworkId) ?? null
   }
 
   function getWrongBook(wrongBookId: string) {
     return wrongBookDetailMap.value[wrongBookId] ?? wrongBooks.value.find((item) => item.id === wrongBookId) ?? null
+  }
+
+  function getWrongBookPracticeDetail(practiceId: string | number) {
+    return wrongBookPracticeDetailMap.value[`${practiceId}`] ?? null
   }
 
   const wrongBookSummary = computed(() =>
@@ -331,8 +452,16 @@ export const useStudentPortalStore = defineStore('student-portal', () => {
     completedCount,
     unreadMessageCount,
     pendingWrongBookCount,
+    activeWrongBookCount,
+    riskyCorrectWrongBookCount,
+    masteredArchiveWrongBookCount,
     statusOverview,
     wrongBookSummary,
+    wrongBookPracticePlan,
+    wrongBookPracticeResult,
+    wrongBookPracticeReviewItems,
+    wrongBookPracticeHistory,
+    wrongBookPracticeDetailMap,
     setAuthenticatedUser,
     resetState,
     initializeWorkspace,
@@ -350,7 +479,13 @@ export const useStudentPortalStore = defineStore('student-portal', () => {
     addWrongBook,
     fixWrongBook,
     masteredWrongBook,
+    createWrongBookPracticePlan,
+    submitWrongBookPractice,
+    loadWrongBookPracticeHistory,
+    loadWrongBookPracticeDetail,
+    resolveWrongBookPoolType,
     getHomework,
-    getWrongBook
+    getWrongBook,
+    getWrongBookPracticeDetail
   }
 })

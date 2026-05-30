@@ -35,6 +35,13 @@ public class WrongBookItemPo {
     private String lastFixedText;
     private LocalDateTime lastFixedAt;
     private Integer fixCount;
+    private String poolType;
+    private Integer correctStreak;
+    private BigDecimal masteryScore;
+    private Integer practiceCount;
+    private LocalDateTime lastPracticedAt;
+    private String lastPracticeResult;
+    private String sourceScene;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

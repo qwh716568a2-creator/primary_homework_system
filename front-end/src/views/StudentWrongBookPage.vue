@@ -1,17 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { UploadUserFile } from 'element-plus'
+import { CollectionTag, RefreshRight } from '@element-plus/icons-vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { uploadStudentFile } from '@/api/student'
 import { useStudentPortalStore } from '@/stores/studentPortal'
-import { formatStudentFullDateTime, wrongReasonOptions } from '@/utils/student-portal-view'
+import type { StudentWrongBookPoolType } from '@/types/student-portal'
+import {
+  formatStudentFullDateTime,
+  getStudentWrongBookPoolLabel,
+  wrongReasonOptions
+} from '@/utils/student-portal-view'
 
 const route = useRoute()
+const router = useRouter()
 const store = useStudentPortalStore()
 const selectedSubject = ref('all')
 const selectedStatus = ref<'all' | 'pending_fix' | 'fixed' | 'mastered'>('all')
+const selectedPool = ref<'all' | StudentWrongBookPoolType>('all')
 const detailVisible = ref(false)
 const createVisible = ref(false)
 const activeWrongBookId = ref('')
@@ -35,6 +43,26 @@ const fixForm = reactive({
 })
 
 const currentWrongBook = computed(() => store.getWrongBook(activeWrongBookId.value))
+const displayWrongBooks = computed(() =>
+  store.wrongBooks.filter((item) => selectedPool.value === 'all' || store.resolveWrongBookPoolType(item) === selectedPool.value)
+)
+const wrongBookPracticeStats = computed(() => [
+  {
+    label: '活跃错题',
+    value: store.activeWrongBookCount,
+    hint: '优先进入练习集'
+  },
+  {
+    label: '风险正确',
+    value: store.riskyCorrectWrongBookCount,
+    hint: '最近做对但未稳定'
+  },
+  {
+    label: '已掌握',
+    value: store.masteredArchiveWrongBookCount,
+    hint: '连续答对两次'
+  }
+])
 
 function resetCreateForm() {
   Object.assign(createForm, {
@@ -103,6 +131,24 @@ async function refreshList() {
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '错题本列表刷新失败。')
   }
+}
+
+async function startPractice() {
+  try {
+    await store.createWrongBookPracticePlan(selectedSubject.value, 10)
+    void router.push({
+      path: '/student/wrong-book/practice',
+      query: {
+        subjectCode: selectedSubject.value
+      }
+    })
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '错题小练习生成失败，请稍后重试。')
+  }
+}
+
+function openPracticeHistory() {
+  void router.push('/student/wrong-book/practice/history')
 }
 
 async function openDetail(wrongBookId: string) {
@@ -229,8 +275,37 @@ onMounted(() => {
         <h2>错题本</h2>
         <p>把老师标记的错题和自己主动整理的题集中管理，订正后继续跟踪掌握状态。</p>
       </div>
-      <el-button type="primary" @click="createVisible = true">新增错题</el-button>
+      <div class="student-wrongbook-header-actions">
+        <el-button @click="openPracticeHistory">
+          <el-icon><CollectionTag /></el-icon>
+          练习记录
+        </el-button>
+        <el-button type="primary" :loading="store.loading.wrongBookPractice" @click="startPractice">
+          <el-icon><RefreshRight /></el-icon>
+          开始练习
+        </el-button>
+        <el-button @click="createVisible = true">新增错题</el-button>
+      </div>
     </header>
+
+    <section class="surface-card student-wrongbook-hero">
+      <div class="student-wrongbook-hero__copy">
+        <span>智能错题本</span>
+        <h2>错题小练习</h2>
+        <p>默认按 80% 活跃错题和 20% 风险正确题生成练习，连续做对两次后会移出活跃错题本。</p>
+      </div>
+      <div class="student-wrongbook-hero__stats">
+        <article v-for="item in wrongBookPracticeStats" :key="item.label" class="student-wrongbook-stat">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <small>{{ item.hint }}</small>
+        </article>
+      </div>
+      <div class="student-wrongbook-hero__actions">
+        <el-button @click="openPracticeHistory">最近练习</el-button>
+        <el-button type="primary" :loading="store.loading.wrongBookPractice" @click="startPractice">开始错题小练习</el-button>
+      </div>
+    </section>
 
     <section class="surface-card section-card">
       <div class="student-filter-strip">
@@ -268,6 +343,37 @@ onMounted(() => {
         <div class="student-filter-strip__group">
           <button
             type="button"
+            :class="['student-filter-chip', { 'student-filter-chip--active': selectedPool === 'all' }]"
+            @click="selectedPool = 'all'"
+          >
+            全部题池
+          </button>
+          <button
+            type="button"
+            :class="['student-filter-chip', { 'student-filter-chip--active': selectedPool === 'active_wrong' }]"
+            @click="selectedPool = 'active_wrong'"
+          >
+            活跃错题
+          </button>
+          <button
+            type="button"
+            :class="['student-filter-chip', { 'student-filter-chip--active': selectedPool === 'risky_correct' }]"
+            @click="selectedPool = 'risky_correct'"
+          >
+            风险正确
+          </button>
+          <button
+            type="button"
+            :class="['student-filter-chip', { 'student-filter-chip--active': selectedPool === 'mastered_archive' }]"
+            @click="selectedPool = 'mastered_archive'"
+          >
+            已掌握归档
+          </button>
+        </div>
+
+        <div class="student-filter-strip__group">
+          <button
+            type="button"
             :class="['student-filter-chip', { 'student-filter-chip--active': selectedSubject === 'all' }]"
             @click="selectedSubject = 'all'; refreshList()"
           >
@@ -285,9 +391,9 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-if="store.wrongBooks.length" class="student-wrongbook-grid">
+      <div v-if="displayWrongBooks.length" class="student-wrongbook-grid">
         <article
-          v-for="item in store.wrongBooks"
+          v-for="item in displayWrongBooks"
           :key="item.id"
           class="surface-card student-wrongbook-card"
           @click="openDetail(item.id)"
@@ -296,11 +402,16 @@ onMounted(() => {
             <span class="soft-chip">{{ item.subjectName }}</span>
             <StatusTag kind="wrong-book" :value="item.status" />
           </div>
+          <span class="student-pool-pill">{{ getStudentWrongBookPoolLabel(store.resolveWrongBookPoolType(item)) }}</span>
           <h3>{{ item.questionNo ? `第 ${item.questionNo} 题 · ` : '' }}{{ item.questionText }}</h3>
           <p>{{ item.analysisText || item.wrongReasonLabel || '点击查看题目详情和订正内容。' }}</p>
           <div class="student-wrongbook-card__meta">
             <span>{{ item.teacherName || '我的错题整理' }}</span>
             <span>{{ formatStudentFullDateTime(item.createdAt) }}</span>
+          </div>
+          <div class="student-wrongbook-practice-meta">
+            <span>连续正确 {{ item.correctStreak ?? 0 }} 次</span>
+            <span>练习 {{ item.practiceCount ?? 0 }} 次</span>
           </div>
         </article>
       </div>
@@ -320,10 +431,29 @@ onMounted(() => {
           <div class="chip-row">
             <span class="soft-chip">{{ currentWrongBook.subjectName }}</span>
             <StatusTag kind="wrong-book" :value="currentWrongBook.status" />
+            <span class="soft-chip">{{ getStudentWrongBookPoolLabel(store.resolveWrongBookPoolType(currentWrongBook)) }}</span>
           </div>
           <h3>{{ currentWrongBook.questionText }}</h3>
           <p class="section-subtitle">{{ formatStudentFullDateTime(currentWrongBook.createdAt) }}</p>
         </div>
+
+        <section class="surface-card section-card">
+          <h3>练习状态</h3>
+          <div class="student-practice-summary">
+            <div>
+              <span>连续正确</span>
+              <strong>{{ currentWrongBook.correctStreak ?? 0 }}</strong>
+            </div>
+            <div>
+              <span>练习次数</span>
+              <strong>{{ currentWrongBook.practiceCount ?? 0 }}</strong>
+            </div>
+            <div>
+              <span>最近练习</span>
+              <strong>{{ formatStudentFullDateTime(currentWrongBook.lastPracticedAt) }}</strong>
+            </div>
+          </div>
+        </section>
 
         <section class="surface-card section-card">
           <h3>错题信息</h3>
@@ -461,6 +591,78 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.student-wrongbook-header-actions,
+.student-wrongbook-hero,
+.student-wrongbook-hero__stats,
+.student-wrongbook-hero__actions,
+.student-wrongbook-practice-meta,
+.student-practice-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.student-wrongbook-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.student-wrongbook-hero {
+  justify-content: space-between;
+  padding: 1.25rem;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at right top, rgba(34, 197, 94, 0.12), transparent 30%),
+    linear-gradient(135deg, #ffffff, #f6fbff);
+}
+
+.student-wrongbook-hero__copy {
+  min-width: 220px;
+}
+
+.student-wrongbook-hero__copy span {
+  color: #2563eb;
+  font-weight: 800;
+}
+
+.student-wrongbook-hero__copy h2 {
+  margin: 0.35rem 0 0;
+  color: #112640;
+  font-size: 1.8rem;
+}
+
+.student-wrongbook-hero__copy p {
+  margin: 0.45rem 0 0;
+  max-width: 36rem;
+  color: #63778d;
+}
+
+.student-wrongbook-hero__stats {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.student-wrongbook-stat {
+  min-width: 116px;
+  padding: 0.9rem;
+  border: 1px solid #e0eaf5;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.student-wrongbook-stat span,
+.student-wrongbook-stat small {
+  display: block;
+  color: #6b7f95;
+}
+
+.student-wrongbook-stat strong {
+  display: block;
+  margin: 0.2rem 0;
+  color: #112640;
+  font-size: 1.7rem;
+}
+
 .student-filter-strip {
   display: flex;
   flex-direction: column;
@@ -523,10 +725,59 @@ onMounted(() => {
   line-height: 1.7;
 }
 
+.student-pool-pill {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 0.85rem;
+  padding: 0.36rem 0.72rem;
+  border-radius: 999px;
+  color: #0f766e;
+  background: #e6f8ef;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .student-wrongbook-card__meta {
   margin-top: 1rem;
   color: #6d8196;
   font-size: 0.88rem;
+}
+
+.student-wrongbook-practice-meta {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: 0.8rem;
+  color: #6a7e94;
+  font-size: 0.86rem;
+}
+
+.student-practice-summary {
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.student-practice-summary div {
+  padding: 0.9rem;
+  border: 1px solid #e2ebf5;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.student-practice-summary span,
+.student-practice-summary strong {
+  display: block;
+}
+
+.student-practice-summary span {
+  color: #6b7f95;
+  font-size: 0.86rem;
+}
+
+.student-practice-summary strong {
+  margin-top: 0.25rem;
+  color: #13253d;
+  font-size: 1.15rem;
 }
 
 .student-wrongbook-drawer h3 {
@@ -550,7 +801,29 @@ onMounted(() => {
 }
 
 @media (max-width: 1080px) {
+  .student-wrongbook-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .student-wrongbook-hero__stats {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
   .student-wrongbook-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .student-wrongbook-hero__stats,
+  .student-wrongbook-hero__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .student-practice-summary {
     grid-template-columns: 1fr;
   }
 }

@@ -23,17 +23,26 @@ CREATE TABLE IF NOT EXISTS `wrong_book_item` (
   `last_fixed_text` TEXT DEFAULT NULL,
   `last_fixed_at` DATETIME DEFAULT NULL,
   `fix_count` INT NOT NULL DEFAULT 0,
+  `pool_type` VARCHAR(32) NOT NULL DEFAULT 'active_wrong' COMMENT 'active_wrong risky_correct mastered_archive',
+  `correct_streak` INT NOT NULL DEFAULT 0,
+  `mastery_score` DECIMAL(5,2) NOT NULL DEFAULT 100.00,
+  `practice_count` INT NOT NULL DEFAULT 0,
+  `last_practiced_at` DATETIME DEFAULT NULL,
+  `last_practice_result` VARCHAR(16) DEFAULT NULL COMMENT 'correct wrong',
+  `source_scene` VARCHAR(32) DEFAULT NULL COMMENT 'teacher_mark student_manual practice_generated',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_wrong_book_student_status` (`student_id`, `status`),
+  KEY `idx_wrong_book_student_pool` (`student_id`, `pool_type`),
+  KEY `idx_wrong_book_practice_pick` (`student_id`, `pool_type`, `subject_code`, `mastery_score`),
   KEY `idx_wrong_book_student_subject` (`student_id`, `subject_code`),
   KEY `idx_wrong_book_homework` (`homework_id`),
   KEY `idx_wrong_book_task` (`task_id`),
   KEY `idx_wrong_book_review` (`review_id`),
   KEY `idx_wrong_book_source` (`source_type`),
   UNIQUE KEY `uk_wrong_book_review_question` (`review_id`, `question_no`, `source_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='错题本主表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='wrong book item';
 
 CREATE TABLE IF NOT EXISTS `wrong_book_asset` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -46,4 +55,51 @@ CREATE TABLE IF NOT EXISTS `wrong_book_asset` (
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_wrong_book_asset_book_id` (`wrong_book_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='错题本附件表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='wrong book asset';
+
+CREATE TABLE IF NOT EXISTS `wrong_book_practice` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `student_id` BIGINT NOT NULL COMMENT 'student_profile.id',
+  `practice_name` VARCHAR(128) NOT NULL,
+  `practice_type` VARCHAR(32) NOT NULL DEFAULT 'smart_wrong_book',
+  `question_count` INT NOT NULL DEFAULT 0,
+  `wrong_question_count` INT NOT NULL DEFAULT 0,
+  `risky_question_count` INT NOT NULL DEFAULT 0,
+  `submitted_count` INT NOT NULL DEFAULT 0,
+  `correct_count` INT NOT NULL DEFAULT 0,
+  `wrong_count` INT NOT NULL DEFAULT 0,
+  `accuracy_rate` DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'generated' COMMENT 'generated in_progress completed abandoned',
+  `generated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `started_at` DATETIME DEFAULT NULL,
+  `submitted_at` DATETIME DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_wrong_book_practice_student_time` (`student_id`, `generated_at`),
+  KEY `idx_wrong_book_practice_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='smart wrong-book practice';
+
+CREATE TABLE IF NOT EXISTS `wrong_book_practice_item` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `practice_id` BIGINT NOT NULL,
+  `student_id` BIGINT NOT NULL COMMENT 'student_profile.id',
+  `wrong_book_id` BIGINT NOT NULL,
+  `question_no` VARCHAR(32) DEFAULT NULL,
+  `subject_code` VARCHAR(32) DEFAULT NULL,
+  `question_text` TEXT DEFAULT NULL,
+  `correct_answer` TEXT DEFAULT NULL,
+  `student_answer` TEXT DEFAULT NULL,
+  `item_source_type` VARCHAR(32) NOT NULL COMMENT 'active_wrong risky_correct',
+  `item_weight` DECIMAL(5,2) NOT NULL DEFAULT 100.00,
+  `result_status` VARCHAR(16) NOT NULL DEFAULT 'unanswered' COMMENT 'correct wrong unanswered',
+  `used_duration_seconds` INT DEFAULT NULL,
+  `sort_no` INT NOT NULL DEFAULT 1,
+  `submitted_at` DATETIME DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_wrong_book_practice_item_practice` (`practice_id`, `sort_no`),
+  KEY `idx_wrong_book_practice_item_student` (`student_id`, `practice_id`),
+  KEY `idx_wrong_book_practice_item_book` (`wrong_book_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='smart wrong-book practice item';
